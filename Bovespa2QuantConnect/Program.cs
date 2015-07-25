@@ -14,7 +14,7 @@ namespace Bovespa2QuantConnect
     {
         static readonly CultureInfo _langbr = CultureInfo.CreateSpecificCulture("pt-BR");
         static readonly CultureInfo _langus = CultureInfo.CreateSpecificCulture("en-US");
-        static readonly string _leanequityfolder = @"C:\Users\Alexandre\Documents\GitHub\Lean\Data\equity\brazil\";
+        static readonly string _leanequityfolder = @"C:\Users\Alexandre\Documents\GitHub\Lean\Data\equity\bra\";
 
         static void Main(string[] args)
         {
@@ -42,7 +42,8 @@ namespace Bovespa2QuantConnect
                 switch (key)
                 {
                     case '1':
-                        ReadZipFiles(new DirectoryInfo(dir).GetFiles("COTAHIST_A2*zip"), false);
+                        ReadZipFiles(new DirectoryInfo(dir).GetFiles("COTAHIST_A*zip")
+                            .Where(f => int.Parse(f.FullName.Substring(f.FullName.Length - 8, 4)) > 1997).ToArray(), false);
                         break;
                     case '2':
                         ReadZipFiles(new DirectoryInfo(dir).GetFiles("NEG_20*zip"), false);
@@ -67,7 +68,8 @@ namespace Bovespa2QuantConnect
                         //ReadNEG(true, cutoff);
                         break;
                     case '8':
-                        ReadZipFiles(new DirectoryInfo(dir).GetFiles("COTAHIST_A2*zip"), true);
+                        ReadZipFiles(new DirectoryInfo(dir).GetFiles("COTAHIST_A*zip")
+                            .Where(f => int.Parse(f.FullName.Substring(f.FullName.Length - 8, 4)) > 1997).ToArray(), true);
                         break;
                     case '9':
                         ZipALLRaw();
@@ -118,24 +120,24 @@ namespace Bovespa2QuantConnect
 
         private static async Task WriteQuantConnectHolidayFile(ZipArchiveEntry entry)
         {
-            // America/Sao_Paulo,brazil,,equity,-,-,-,-,9.5,10,16.9166667,18,9.5,10,16.9166667,18,9.5,10,16.9166667,18,9.5,10,16.9166667,18,9.5,10,16.9166667,18,-,-,-,-
+            // America/Sao_Paulo,bra,,equity,-,-,-,-,9.5,10,16.9166667,18,9.5,10,16.9166667,18,9.5,10,16.9166667,18,9.5,10,16.9166667,18,9.5,10,16.9166667,18,-,-,-,-
             var year = int.Parse(entry.Name.Substring(10, 4));
             var filedate = new DateTime(year + 1, 1, 1).AddDays(-1);
-            var lastdate = new DateTime(1999, 1, 1);
-            var outputfile = _leanequityfolder.Replace("equity\brazil", "market-hours") + "holidays-brazil.csv";
-            var fileexists = File.Exists(outputfile) && 
+            var lastdate = new DateTime(1998, 1, 1);
+            var outputfile = _leanequityfolder.Replace("equity\\bra", "market-hours") + "holidays-bra.csv";
+            var fileexists = File.Exists(outputfile) &&
                 DateTime.TryParseExact(File.ReadAllLines(outputfile).ToList().Last(), "yyyy, MM, dd",
                 CultureInfo.InvariantCulture, DateTimeStyles.None, out lastdate);
 
             if (lastdate >= filedate) return;
             if (!fileexists) File.WriteAllText(outputfile, "year, month, day\r\n# Brazil Equity market holidays\r\n");
-            
+
             var holidays = new List<DateTime>();
 
             using (var file = new StreamReader(entry.Open()))
             {
                 filedate = new DateTime(year, 1, 1);
-            
+
                 while (filedate.Year == year)
                 {
                     if (filedate.DayOfWeek != DayOfWeek.Saturday && filedate.DayOfWeek != DayOfWeek.Sunday) holidays.Add(filedate);
@@ -148,10 +150,9 @@ namespace Bovespa2QuantConnect
                     if (DateTime.TryParseExact(line.Substring(2, 8), "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out filedate))
                         holidays.Remove(filedate);
                 }
-
-                holidays.RemoveAll(d => d <= lastdate);
+                holidays.RemoveAll(d => d < lastdate);
             }
-
+            #region Get Holidays from Bovespa page
             if (holidays.Last().Year == DateTime.Now.Year - 1)
             {
                 var ids = new List<int>();
@@ -185,9 +186,8 @@ namespace Bovespa2QuantConnect
                                 id++;
                                 if (DateTime.TryParseExact(months[i].Substring(id, 2) + months[i].Substring(0, 3) + DateTime.Now.Year.ToString(),
                                     "ddMMMyyyy", _langbr, DateTimeStyles.None, out filedate))
-                                    holidays.Add(filedate);                
+                                    holidays.Add(filedate);
                             }
-                            
                             i++;
                         }
                     }
@@ -196,24 +196,14 @@ namespace Bovespa2QuantConnect
                 {
                     Console.WriteLine(e.Message);
                 }
-
-                holidays.ForEach(d => File.AppendAllText(outputfile, d.Year.ToString("0000") + ", " + d.Month.ToString("00") + ", " + d.Day.ToString("00\r\n")));                
+            #endregion
             }
+            holidays.ForEach(d => File.AppendAllText(outputfile, d.Year.ToString("0000") + ", " + d.Month.ToString("00") + ", " + d.Day.ToString("00\r\n")));
         }
 
         private static async Task WriteQuantConnectTickFile(string line)
         {
-            int type;
-            if (!int.TryParse(line.Substring(15, 3), out type) || type > 11) return;
-
-            line = line
-                .Replace("BMEF", "BVMF")
-                .Replace("TLPP", "VIVT")
-                .Replace("VNET", "CIEL")
-                .Replace("VCPA", "FIBR")
-                .Replace("PRGA", "BRFS")
-                .Replace("AMBV4", "ABEV3")
-                .Replace("DURA4", "DTEX3");
+            if (Filter(line)) return;
 
             var data = line.Split(';');
 
@@ -233,20 +223,11 @@ namespace Bovespa2QuantConnect
 
         private static async Task WriteQuantConnectDailyFile(string line)
         {
-            int type;
-            if (!int.TryParse(line.Substring(16, 3), out type) || type > 11) return;
-
-            line = line
-                .Replace("BMEF", "BVMF")
-                .Replace("TLPP", "VIVT")
-                .Replace("VNET", "CIEL")
-                .Replace("VCPA", "FIBR")
-                .Replace("PRGA", "BRFS")
-                .Replace("AMBV4", "ABEV3")
-                .Replace("DURA4", "DTEX3");
+            if (Filter(line)) return;
 
             var dir = Directory.CreateDirectory(_leanequityfolder + @"daily\");
             var file = dir.FullName + line.Substring(12, 12).Trim().ToLower() + ".csv";
+            if (line.Substring(12, 12).Trim().Contains(" ")) return;
 
             var output = line.Substring(2, 8) + ",";
             output += Convert.ToInt64(line.Substring(56, 13)) * 100 + ",";
@@ -262,8 +243,9 @@ namespace Bovespa2QuantConnect
         {
             var codes = new List<int>();
             var symbols = new List<string>();
+            var startdate = new DateTime(1998, 1, 1);
             var alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".ToList();
-            alphabet.Clear();
+            //alphabet.Clear();
 
             #region GetCodes
             foreach (var letter in alphabet)
@@ -312,8 +294,8 @@ namespace Bovespa2QuantConnect
                 });
             #endregion
 
-            codes.Add(4170);
-            codes.Add(9512);
+            if (!codes.Contains(4170)) codes.Add(4170); // VALE
+            if (!codes.Contains(9512)) codes.Add(9512); // PETR
 
             foreach (var code in codes)
             {
@@ -361,7 +343,9 @@ namespace Bovespa2QuantConnect
                 foreach (var symbol in thiscodesymbols)
                 {
                     var date = new DateTime();
-
+                    var keys = new List<DateTime>();
+                    var fkeys = new List<DateTime>();
+                    
                     var events = new Dictionary<DateTime, decimal>();
                     var factors = new Dictionary<DateTime, decimal>();
 
@@ -369,80 +353,98 @@ namespace Bovespa2QuantConnect
                     var comprice = new Dictionary<DateTime, decimal>();
 
                     #region Dividends
-                    index = 0;
-
-                    while ((index = page1.IndexOf(">" + kind[int.Parse(symbol.Substring(4))] + "<", index)) > 0)
+                    try
                     {
-                        index++;
-                        var idx = 0;
-                        var cols = new List<string>();
-                        var row = page1.Substring(index, page1.IndexOf("</tr>", index) - index);
+                        index = 0;
 
-                        while ((idx = row.IndexOf("\">", idx) + 2) >= 2) cols.Add(row.Substring(idx, row.IndexOf("<", idx) - idx));
+                        while ((index = page1.IndexOf(">" + kind[int.Parse(symbol.Substring(4))] + "<", index)) > 0)
+                        {
+                            index++;
+                            var idx = 0;
+                            var cols = new List<string>();
+                            var row = page1.Substring(index, page1.IndexOf("</tr>", index) - index);
 
-                        if (!DateTime.TryParseExact(cols[4], "dd/MM/yyyy", _langbr, DateTimeStyles.None, out date) &&
-                            !DateTime.TryParseExact(cols[3], "dd/MM/yyyy", _langbr, DateTimeStyles.None, out date))
-                            date = DateTime.ParseExact(cols[0], "dd/MM/yyyy", _langbr, DateTimeStyles.None);
-                        if (date < new DateTime(2000, 1, 1)) continue;
+                            while ((idx = row.IndexOf("\">", idx) + 2) >= 2) cols.Add(row.Substring(idx, row.IndexOf("<", idx) - idx));
 
-                        if (!comprice.ContainsKey(date)) comprice.Add(date, decimal.Parse(cols[5], _langbr));
+                            if (!DateTime.TryParseExact(cols[4], "dd/MM/yyyy", _langbr, DateTimeStyles.None, out date) &&
+                                !DateTime.TryParseExact(cols[3], "dd/MM/yyyy", _langbr, DateTimeStyles.None, out date))
+                                date = DateTime.ParseExact(cols[0], "dd/MM/yyyy", _langbr, DateTimeStyles.None);
+                            if (date < startdate) continue;
 
-                        if (dividend.ContainsKey(date))
-                            dividend[date] += decimal.Parse(cols[1], _langbr);
-                        else
-                            dividend.Add(date, decimal.Parse(cols[1], _langbr));
+                            if (!comprice.ContainsKey(date)) comprice.Add(date, decimal.Parse(cols[5], _langbr));
 
+                            if (dividend.ContainsKey(date))
+                                dividend[date] += decimal.Parse(cols[1], _langbr);
+                            else
+                                dividend.Add(date, decimal.Parse(cols[1], _langbr));
+
+                        }
+                        events = comprice.OrderBy(x => x.Key).ToDictionary(x => x.Key, y => 1m);
+                        comprice = comprice.OrderBy(x => x.Key).ToDictionary(x => x.Key, y => y.Value);
+                        dividend = dividend.OrderBy(x => x.Key).ToDictionary(x => x.Key, y => y.Value);
+
+                        fkeys = comprice.Keys.ToList();
+                        for (var i = 0; i < fkeys.Count; i++)
+                        {
+                            var factor = 1 - dividend[fkeys[i]] / comprice[fkeys[i]];
+
+                            for (var j = i + 1; j < fkeys.Count; j++)
+                                factor *= (1 - dividend[fkeys[j]] / comprice[fkeys[j]]);
+
+                            factors.Add(fkeys[i], factor);
+                        }
+                        factors.Add(new DateTime(2049, 12, 31), 1m);
                     }
-                    events = comprice.OrderBy(x => x.Key).ToDictionary(x => x.Key, y => 1m);
-                    comprice = comprice.OrderBy(x => x.Key).ToDictionary(x => x.Key, y => y.Value);
-                    dividend = dividend.OrderBy(x => x.Key).ToDictionary(x => x.Key, y => y.Value);
-                    
-                    var fkeys = comprice.Keys.ToList();
-                    for (var i = 0; i < fkeys.Count; i++)
+                    catch (Exception e)
                     {
-                        var factor = 1 - dividend[fkeys[i]] / comprice[fkeys[i]];
-
-                        for (var j = i + 1; j < fkeys.Count; j++)
-                            factor *= (1 - dividend[fkeys[j]] / comprice[fkeys[j]]);
-
-                        factors.Add(fkeys[i], factor);
+                        Console.WriteLine(e.Message);
                     }
-                    factors.Add(new DateTime(2049, 12, 31), 1m);
                     #endregion
 
                     #region Corporate events
-                    index = 0;
-
-                    while ((index = page2.IndexOf("<tr", index + 1)) > 1)
+                    try
                     {
-                        index++;
-                        var idx = 0;
-                        var cols = new List<string>();
-                        var row = page2.Substring(index, page2.IndexOf("/tr", index) - index);
-                        if (row.Contains("Cisão")) continue;
+                        index = 0;
 
-                        while ((idx = row.IndexOf("\">", idx) + 2) >= 2) cols.Add(row.Substring(idx, row.IndexOf("<", idx) - idx));
+                        while ((index = page2.IndexOf("<tr", index + 1)) > 1)
+                        {
+                            index++;
+                            var idx = 0;
+                            var cols = new List<string>();
+                            var row = page2.Substring(index, page2.IndexOf("/tr", index) - index);
+                            if (row.Contains("Cisão")) continue;
 
-                        if (!DateTime.TryParseExact(cols[2], "dd/MM/yyyy", _langbr, DateTimeStyles.None, out date))
-                            date = DateTime.ParseExact(cols[1], "dd/MM/yyyy", _langbr, DateTimeStyles.None);
-                        if (date < new DateTime(2000, 1, 1)) continue;
+                            while ((idx = row.IndexOf("\">", idx) + 2) >= 2) cols.Add(row.Substring(idx, row.IndexOf("<", idx) - idx));
 
-                        cols = cols[4].Split('/').ToList();
+                            if (!DateTime.TryParseExact(cols[2], "dd/MM/yyyy", _langbr, DateTimeStyles.None, out date))
+                                date = DateTime.ParseExact(cols[1], "dd/MM/yyyy", _langbr, DateTimeStyles.None);
+                            if (date < startdate) continue;
 
-                        var event0 = decimal.Parse(cols[0]);
-                        if (cols.Count == 1) event0 = 1 / (1m + event0 / 100m);
-                        if (cols.Count == 2) event0 = event0 / decimal.Parse(cols[1]);
+                            cols = cols[4].Split('/').ToList();
 
-                        if (events.ContainsKey(date))
-                            events[date] = event0;
-                        else
-                            events.Add(date, event0);                      
+                            var event0 = decimal.Parse(cols[0]);
+                            if (cols.Count == 1) event0 = 1 / (1m + event0 / 100m);
+                            if (cols.Count == 2)
+                            {
+                                event0 = event0 / decimal.Parse(cols[1]);
+                                if (code == 9512) event0 = .1m;
+                            }
+
+                            if (events.ContainsKey(date))
+                                events[date] = event0;
+                            else
+                                events.Add(date, event0);
+                        }
+                        events.Add(new DateTime(2049, 12, 31), 1m);
+                        events = events.OrderBy(x => x.Key).ToDictionary(x => x.Key, y => y.Value);
                     }
-                    events.Add(new DateTime(2049, 12, 31), 1m);
-                    events = events.OrderBy(x => x.Key).ToDictionary(x => x.Key, y => y.Value);
+                    catch (Exception e)
+                    {
+                        Console.WriteLine(e.Message);
+                    }
                     #endregion
 
-                    var keys = events.Keys.ToList();
+                    keys = events.Keys.ToList();
                     for (var i = 0; i < keys.Count; i++) for (var j = i + 1; j < keys.Count; j++) events[keys[i]] *= events[keys[j]];
 
                     keys.Except(fkeys).ToList().ForEach(k => { if (!factors.ContainsKey(k)) factors.Add(k, 0m); });
@@ -459,6 +461,7 @@ namespace Bovespa2QuantConnect
                             Math.Round(factors[key], 9).ToString(_langus) + "," + Math.Round(events[key], 9).ToString(_langus) + "\r\n");
                     #endregion
                 }
+                Console.WriteLine(DateTime.Now + " " + ((1 + codes.IndexOf(code)) / (double)codes.Count).ToString("0.00%"));             
             }
             Console.WriteLine("Done!");
         }
@@ -477,25 +480,49 @@ namespace Bovespa2QuantConnect
  
                 foreach (var zipfile in zipfiles)
                 {
-                    var factorfile = factorfilesdir + zipfile.Name.Replace("zip", "csv");
+                    var index = zipfile.Name.IndexOf('.');
+                    if (index < 4) continue;
 
+                    var output = new List<string>();
+                    var symbol = zipfile.Name.Substring(0, index);
+                    var period = dir.FullName.Contains("daily") ? "_Diário" : "1min";
+                    var outputfile = symbol.ToUpper() + period + ".csv";
+                    var factorfile = factorfilesdir + symbol + ".csv";
+                    
                     // Check if we have the file with the factors
-                    if (!File.Exists(factorfile) || zipfile.Name.Length < 9) continue;
+                    if (!File.Exists(factorfile)) continue;
+                    if (!File.Exists(outputfile)) File.Delete(outputfile);
 
                     var factors = ReadFactorFile(factorfile);                        
                     
                     using (var zip2open = new FileStream(zipfile.FullName, FileMode.Open, FileAccess.Read))
                     using (var archive = new ZipArchive(zip2open, ZipArchiveMode.Read))
                     using (var file = new StreamReader(archive.Entries.First().Open()))
+                    {
                         while (!file.EndOfStream)
                         {
                             var line = await file.ReadLineAsync();
+                            var data = line.Split(',');
 
+                            var date = DateTime.ParseExact(data[0], "yyyyMMdd", _langus);
+                            var factordate = factors.Where(kvp => kvp.Key >= date).First().Key;
+                            var factor = factors[factordate];
+
+                            output.Add(symbol.ToUpper() + ";" +
+                                date.ToString("dd/MM/yyyy") + ";" +
+                                Math.Round(decimal.Parse(data[1]) * factor / 10000, 2).ToString("0.00", _langbr) + ";" +
+                                Math.Round(decimal.Parse(data[2]) * factor / 10000, 2).ToString("0.00", _langbr) + ";" +
+                                Math.Round(decimal.Parse(data[3]) * factor / 10000, 2).ToString("0.00", _langbr) + ";" +
+                                Math.Round(decimal.Parse(data[4]) * factor / 10000, 2).ToString("0.00", _langbr) + ";" +
+                                data[5] + "\r\n");  
                         }
+                    }
+                    for (var i = output.Count - 1; i > 0; i--) File.AppendAllText(outputfile, output[i]);
                 }
             }
-            
+            Console.WriteLine("Done!");
         }
+
         private static SortedList<DateTime,decimal> ReadFactorFile(string file)
         {
             var factors = new SortedList<DateTime, decimal>();
@@ -563,6 +590,23 @@ namespace Bovespa2QuantConnect
             }
         }
 
+        private static bool Filter(string line)
+        {
+            int type;
+            if (!int.TryParse(line.Substring(16, 3), out type) || type < 3 || (type > 8 && type != 11)) return true;
+
+            line = line
+                .Replace("BMEF", "BVMF")
+                .Replace("TLPP", "VIVT")
+                .Replace("VNET", "CIEL")
+                .Replace("VCPA", "FIBR")
+                .Replace("PRGA", "BRFS")
+                .Replace("AMBV4", "ABEV3")
+                .Replace("DURA4", "DTEX3");
+
+            return false;
+        }
+
         static void ZipALLRaw()
         {
             Console.WriteLine();
@@ -579,6 +623,8 @@ namespace Bovespa2QuantConnect
                 {
                     var zipfile = dir.FullName + @"\" + file.Name.Substring(0, 9) + "trade.zip";
                     if (dir.FullName.Contains("daily")) zipfile = file.FullName.Replace(".csv", ".zip");
+
+                    File.WriteAllLines(file.FullName, File.ReadAllLines(file.FullName).OrderBy(d => d));
 
                     using (var z = new FileStream(zipfile, FileMode.Create))
                     using (var a = new ZipArchive(z, ZipArchiveMode.Create))
