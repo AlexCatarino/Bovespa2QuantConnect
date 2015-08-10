@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.IO;
 using System.Globalization;
 using System.Net.Http;
+using System.Collections.Concurrent;
 
 namespace Bovespa2QuantConnect
 {
@@ -14,12 +15,104 @@ namespace Bovespa2QuantConnect
     {
         static readonly CultureInfo _langbr = CultureInfo.CreateSpecificCulture("pt-BR");
         static readonly CultureInfo _langus = CultureInfo.CreateSpecificCulture("en-US");
-        static readonly string _leanequityfolder = @"C:\Users\Alexandre\Documents\GitHub\Lean\Data\equity\bra\";
+        static string _rawdatafolder = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        static string _leanequityfolder = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        #region TickChange Dictionary
+        static Dictionary<string, string> TickerChange = new Dictionary<string, string>() 
+            {   // NEW      OLD 
+                {"ABCB4", "ABCB11"}, //
+                {"ABEV3", "AMBV3" }, // AMBV3 AMBV4
+                {"ABRE3", "ABRE11"}, //
+                {"AEDU3", "AEDU11"}, //
+                {"AGEI3", "AGIN3" }, // ABYA3 KSSA3
+                {"AMAR3", "MARI3" }, //
+                {"ARCE3", "BELG3" }, //
+                {"ARTR3", "OHLB3" }, //
+                {"BHGR3", "IVTT3" }, //
+                {"BICB4", "BICB11"}, //
+                {"BPAN4", "BPNM4" }, //
+                {"BRFS3", "PRGA3" }, //
+                {"BRKM3", "CPNE3" },
+                {"BRKM5", "CPNE5" }, //
+                {"BRKM6", "CPNE6" }, //
+                {"BRSR6", "BRSR11"}, //
+                {"BRTO3", "TEPR3" }, 
+                {"BRTO4", "TEPR4" }, //
+                {"BRTP3", "TCSP3" }, //
+                {"BRTP4", "TCSP4" }, //
+                {"BTOW3", "SUBA3" }, //
+                {"BVMF3", "BMEF3" }, // BOVH3
+                {"CESP5", "CESP4" }, //
+                {"CGAS5", "CGAS4" }, //
+                {"CIEL3", "VNET3" }, //
+                {"CLSC4", "CLSC6" }, //
+                {"DAGB11", "DUFB11"}, //
+                {"DTEX3", "DURA3" }, // DURA4 SATI3
+                {"EMBR4", "EMBR5" }, //
+                {"ENEV3", "MPXE3" }, //
+                {"ENGI3", "FLCL3" }, //
+                {"ENGI4", "FLCL5" }, //
+                {"EQTL3", "EQTL11"}, //
+                {"ESTC3", "ESTC11"}, //
+                {"FRAS3", "STED3" },
+                {"FRAS4", "STED4" },
+                {"FIBR3", "VCPA3" }, //
+                {"GGBR3", "COGU3" }, 
+                {"GGBR4", "COGU4" }, //
+                {"HGCR11", "CSBC11"}, //
+                {"IBAN5", "IBAN4" },
+                {"ITUB3", "ITAU3" }, //
+                {"ITUB4", "ITAU4" }, //
+                {"KLBN3", "KLAB3" }, 
+                {"KLBN4", "KLAB4" }, //
+                {"LIGT3", "LIGH3" }, //
+                {"MAGG3", "MAGS3" }, // MAGS5 MAGS7
+                {"NETC3", "PLIM3" }, 
+                {"NETC4", "PLIM4" }, //
+                {"OIBR3", "BRTO3" }, //
+                {"OIBR4", "BRTO4" }, //
+                {"PALF5", "PALF4" },
+                {"PLAS4", "OSAO4" }, //
+                {"PLAS3", "PLAS4" }, //
+                {"PMET6", "BCAL6" },
+                {"PRBC4", "PRBC11"}, //
+                {"PRIO3", "HRTP3" },
+                {"PRML3", "LLXL3" },
+                {"RADL3", "DROG3" }, // RAIA3
+                {"REDE3", "ELCA3" },
+                {"REDE4", "ELCA4" },
+                {"RUMO3", "ALLL3" },
+                {"SANB3", "BESP3" }, //
+                {"SANB4", "BESP4" }, //
+                {"SDIA3", "SOES3" }, //
+                {"SDIA4", "SOES4" }, //
+                {"STBP11", "STBR11"}, //
+                {"SUZB5", "SUZA4" }, // BSUL
+                {"SWET3", "AORE3" },
+                {"TBLE3", "GRSU3" }, //
+                {"TBLE5", "GRSU5" },
+                {"TBLE6", "GRSU6" }, //
+                {"TERI3", "ACGU3" }, //
+                {"TIMP3", "TCSL3" }, // TCSL4
+                {"TMAR3", "TERJ3" },
+                {"TMAR6", "TERJ4" }, //
+                {"VAGR3", "ECOD3" }, //
+                {"VALE5", "VALE4" }, //
+                {"VCPA4", "PSIM4" }, //
+                {"VIVO3", "TSPP3" }, //
+                {"VIVO4", "TSPP4" }, //
+                {"VIVR3", "INPR3" }, //
+                {"VIVT3", "TLPP3" }, //
+                {"VIVT4", "TLPP4" }, //
+                {"VLID3", "ABNB3" }, //
+                {"WEGE3", "ELMJ3" },
+                {"WEGE4", "ELMJ4" }, // 
+            };
+        #endregion
 
         static void Main(string[] args)
         {
             char key;
-
             var menu =
                 "1. Extract raw data from COTAHIST file to QC daily cvs file.\n" +
                 "2. Extract raw data from NEG* files to QC tick cvs file.\n" +
@@ -33,29 +126,30 @@ namespace Bovespa2QuantConnect
                 "0. Sair\n" +
                 ">> Insira opção: ";
             Console.Write(menu);
+            
+            _rawdatafolder += @"\IBOV\Stock\";
+            _leanequityfolder += @"\GitHub\Lean\Data\equity\bra\";
 
             do
             {
                 key = Console.ReadKey().KeyChar;
-                var dir = @"C:\Users\Alexandre\Documents\IBOV\Stock\";
-
+                
                 switch (key)
                 {
                     case '1':
-                        ReadZipFiles(new DirectoryInfo(dir).GetFiles("COTAHIST_A*zip")
-                            .Where(f => int.Parse(f.FullName.Substring(f.FullName.Length - 8, 4)) > 1997).ToArray(), false);
+                        WriteQuantConnectDailyFile();
                         break;
                     case '2':
-                        ReadZipFiles(new DirectoryInfo(dir).GetFiles("NEG_20*zip"), false);
+                        WriteQuantConnectTickFile();
                         break;
                     case '3':
-                        MakeMinuteFilesFromTickFiles();
+                        WriteQuantConnectMinuteFile(1);
                         break;
                     case '4':
                         WriteQuantConnectFactorFiles();
                         break;
                     case '5':
-                        WriteNelogicaFiles();
+                        WriteNelogicaFiles(true);
                         break;
                     case '6':
                         //new string[] 
@@ -65,14 +159,14 @@ namespace Bovespa2QuantConnect
                         //}.ToList().ForEach(s => AdjustedPrice(s, new DateTime(2014, 5, 31)));
                         break;
                     case '7':
-                        //ReadNEG(true, cutoff);
+                        //SearchTickerChange();
+                        MergeFiles("daily");
                         break;
                     case '8':
-                        ReadZipFiles(new DirectoryInfo(dir).GetFiles("COTAHIST_A*zip")
-                            .Where(f => int.Parse(f.FullName.Substring(f.FullName.Length - 8, 4)) > 1997).ToArray(), true);
+                        WriteQuantConnectHolidayFile();
                         break;
                     case '9':
-                        ZipALLRaw();
+                        ZipALLRaw("daily");
                         break;
                     default:
                         Console.WriteLine("\nOpção Inválida!\n" + menu);
@@ -82,172 +176,226 @@ namespace Bovespa2QuantConnect
             } while (key != '0');
         }
 
-        private static async Task ReadZipFiles(FileInfo[] zipfiles, bool iswriteholidayfiles)
-        {
-            foreach (var zipfile in zipfiles)
-            {
-                using (var zip2open = new FileStream(zipfile.FullName, FileMode.Open, FileAccess.Read))
-                {
-                    using (var archive = new ZipArchive(zip2open, ZipArchiveMode.Read))
-                    {
-                        foreach (var entry in archive.Entries)
-                        {
-                            if (iswriteholidayfiles)
-                            {
-                                await WriteQuantConnectHolidayFile(entry);
-                            }
-                            else
-                            {
-                                using (var file = new StreamReader(entry.Open()))
-                                {
-                                    while (!file.EndOfStream)
-                                    {
-                                        var line = await file.ReadLineAsync();
-
-                                        if (zipfile.Name.Contains("NEG"))
-                                            await WriteQuantConnectTickFile(line);
-                                        else
-                                            await WriteQuantConnectDailyFile(line);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                Console.WriteLine("> " + zipfile);
-            }
-        }
-
-        private static async Task WriteQuantConnectHolidayFile(ZipArchiveEntry entry)
+        private static async Task WriteQuantConnectHolidayFile()
         {
             // America/Sao_Paulo,bra,,equity,-,-,-,-,9.5,10,16.9166667,18,9.5,10,16.9166667,18,9.5,10,16.9166667,18,9.5,10,16.9166667,18,9.5,10,16.9166667,18,-,-,-,-
-            var year = int.Parse(entry.Name.Substring(10, 4));
-            var filedate = new DateTime(year + 1, 1, 1).AddDays(-1);
-            var lastdate = new DateTime(1998, 1, 1);
-            var outputfile = _leanequityfolder.Replace("equity\\bra", "market-hours") + "holidays-bra.csv";
-            var fileexists = File.Exists(outputfile) &&
-                DateTime.TryParseExact(File.ReadAllLines(outputfile).ToList().Last(), "yyyy, MM, dd",
-                CultureInfo.InvariantCulture, DateTimeStyles.None, out lastdate);
-
-            if (lastdate >= filedate) return;
-            if (!fileexists) File.WriteAllText(outputfile, "year, month, day\r\n# Brazil Equity market holidays\r\n");
-
             var holidays = new List<DateTime>();
 
-            using (var file = new StreamReader(entry.Open()))
-            {
-                filedate = new DateTime(year, 1, 1);
+            var ofile = new FileInfo(_leanequityfolder.Replace("equity\\bra", "market-hours") + "holidays-bra.csv");
+            var output = ofile.Exists
+                ? File.ReadAllLines(ofile.FullName).ToList()
+                : (new string[] { "year, month, day" }).ToList();
+            var lastdate = output.Count == 1
+                ? new DateTime(1997, 12, 31)
+                : DateTime.ParseExact(output.Last(), "yyyy, MM, dd", _langus);
 
-                while (filedate.Year == year)
-                {
-                    if (filedate.DayOfWeek != DayOfWeek.Saturday && filedate.DayOfWeek != DayOfWeek.Sunday) holidays.Add(filedate);
-                    filedate = filedate.AddDays(1);
-                }
+            if (lastdate == new DateTime(DateTime.Now.Year, 12, 31)) return;
 
-                while (!file.EndOfStream)
-                {
-                    var line = await file.ReadLineAsync();
-                    if (DateTime.TryParseExact(line.Substring(2, 8), "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out filedate))
-                        holidays.Remove(filedate);
-                }
-                holidays.RemoveAll(d => d < lastdate);
-            }
             #region Get Holidays from Bovespa page
-            if (holidays.Last().Year == DateTime.Now.Year - 1)
+            try
             {
-                var ids = new List<int>();
-                var url = "http://www.bmfbovespa.com.br/pt-br/regulacao/calendario-do-mercado/calendario-do-mercado.aspx";
-                var months = new string[] { "Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez" }.ToList();
-
-                try
+                using (var client = new HttpClient())
+                using (var response = await client.GetAsync("http://www.bmfbovespa.com.br/pt-br/regulacao/calendario-do-mercado/calendario-do-mercado.aspx"))
+                using (var content = response.Content)
                 {
-                    using (var client = new HttpClient())
-                    using (var response = await client.GetAsync(url))
-                    using (var content = response.Content)
+                    var i = 0;
+                    var id = 0;
+                    var date = new DateTime();
+                    var page = await content.ReadAsStringAsync();
+                    page = page.Substring(0, page.IndexOf("linhaDivMais"));
+
+                    var months = new string[] { 
+                        "Jan", "Fev", "Mar",
+                        "Abr", "Mai", "Jun",
+                        "Jul", "Ago", "Set",
+                        "Out", "Nov", "Dez" }.ToList();
+
+                    while (i < 12)
                     {
-                        var i = 0;
-                        var id = 0;
-                        var page = await content.ReadAsStringAsync();
-                        page = page.Substring(0, page.IndexOf("linhaDivMais"));
+                        while (i < 12 && (id = page.IndexOf(">" + months[i + 0] + "<")) < 0) i++;
+                        var start = id + 1;
 
-                        while (i < 12)
+                        while (i < 11 && (id = page.IndexOf(">" + months[i + 1] + "<")) < 0) i++;
+                        var count = id - start;
+
+                        months[i] = count > 0 ? page.Substring(start, count) : page.Substring(start);
+
+                        id = 0;
+                        while ((id = months[i].IndexOf("img/ic_", id) + 6) > 6)
                         {
-                            while (i < 12 && (id = page.IndexOf(">" + months[i + 0] + "<")) < 0) i++;
-                            var start = id + 1;
-
-                            while (i < 11 && (id = page.IndexOf(">" + months[i + 1] + "<")) < 0) i++;
-                            var count = id - start;
-
-                            months[i] = count > 0 ? page.Substring(start, count) : page.Substring(start);
-
-                            id = 0;
-                            while ((id = months[i].IndexOf("img/ic_", id) + 6) > 6)
-                            {
-                                id++;
-                                if (DateTime.TryParseExact(months[i].Substring(id, 2) + months[i].Substring(0, 3) + DateTime.Now.Year.ToString(),
-                                    "ddMMMyyyy", _langbr, DateTimeStyles.None, out filedate))
-                                    holidays.Add(filedate);
-                            }
-                            i++;
+                            id++;
+                            if (DateTime.TryParseExact(months[i].Substring(id, 2) + months[i].Substring(0, 3) + DateTime.Now.Year.ToString(),
+                                "ddMMMyyyy", _langbr, DateTimeStyles.None, out date))
+                                holidays.Add(date);
                         }
+                        i++;
                     }
                 }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e.Message);
-                }
-            #endregion
             }
-            holidays.ForEach(d => File.AppendAllText(outputfile, d.Year.ToString("0000") + ", " + d.Month.ToString("00") + ", " + d.Day.ToString("00\r\n")));
-        }
+            catch (Exception e) { Console.WriteLine(e.Message); }
+            #endregion
 
-        private static async Task WriteQuantConnectTickFile(string line)
+            while (lastdate < holidays.First()) holidays.Add(lastdate = lastdate.AddDays(1));
+            holidays.RemoveAll(d => d.DayOfWeek == DayOfWeek.Saturday || d.DayOfWeek == DayOfWeek.Sunday);
+
+            var zipfiles = new DirectoryInfo(_rawdatafolder).GetFiles("COTAHIST_A*zip").Where(zf =>
+            {
+                var zfyear = int.Parse(zf.Name.Substring(zf.Name.Length - 8, 4));
+                return zfyear >= holidays.Min().Year && zfyear < holidays.Max().Year;
+            }).ToArray();
+
+            foreach (var zf in zipfiles)
+            {
+                var data = await ReadZipFile(zf);
+
+                // Remove header and footer
+                data.RemoveAt(0);
+                data.RemoveAt(data.Count - 1);
+
+                data.Select(l => DateTime.ParseExact(l.Substring(2, 8), "yyyyMMdd", _langus))
+                    .ToList().ForEach(d => holidays.Remove(d));
+                Console.Write("\r\n" + zf.Name + "\t" + holidays.Count);
+            }
+
+            output.AddRange(holidays.OrderBy(d => d).Select(d => d.ToString("yyyy, MM, dd")));
+            File.WriteAllText(ofile.FullName, string.Join("\r\n", output.ToArray()));
+            Console.WriteLine("\r\n" + ofile.Name + " written!");
+        }
+        
+        private static async Task WriteQuantConnectDailyFile()
         {
-            if (Filter(line)) return;
+            FolderCleanUp("daily");
+                        
+            var outputdir = Directory.CreateDirectory(_leanequityfolder + @"daily\");
+            
+            var zipfiles = new DirectoryInfo(_rawdatafolder).GetFiles("COTAHIST_A*zip")
+                .Where(f => int.Parse(f.Name.Substring(f.Name.Length - 8, 4)) > 1997).ToList();
 
-            var data = line.Split(';');
+            Console.WriteLine("\r\n" + zipfiles.Count + " zip files with raw data."); 
 
-            var symbol = data[1].Trim().ToLower();
-            if (symbol != "bbas3") return;
+            foreach (var zipfile in zipfiles)
+            {
+                var data = await ReadZipFile(zipfile);
+                data.RemoveAll(d => Filter(d));
 
-            var dir = Directory.CreateDirectory(_leanequityfolder + @"tick\" + symbol + @"\");
+                data.GroupBy(d => d.Substring(12, 12).Trim().ToLower() + ".csv").ToList().ForEach(d =>
+                {
+                    File.AppendAllLines(outputdir.FullName + d.Key, d.Select(l =>
+                    {
+                        return l.Substring(2, 8) + "," +
+                            100 * Convert.ToInt64(l.Substring(56, 13)) + "," +
+                            100 * Convert.ToInt64(l.Substring(69, 13)) + "," +
+                            100 * Convert.ToInt64(l.Substring(82, 13)) + "," +
+                            100 * Convert.ToInt64(l.Substring(108, 13)) + "," +
+                            100 * Convert.ToInt64(l.Substring(152, 18));
+                    }).OrderBy(l => l));
+                });
+                Console.WriteLine(zipfile.Name.ToUpper() + " read\t" + data.Count);
+            }
 
-            var csvfile = dir.FullName + data[0].Replace("-", "") + "_" + symbol + "_Trade_Tick.csv";
+            outputdir.GetFiles("*.csv").ToList().ForEach(csvFile =>
+            {
+                using (var z = new FileStream(csvFile.FullName.Replace(".csv", ".zip"), FileMode.Create))
+                using (var a = new ZipArchive(z, ZipArchiveMode.Create))
+                    a.CreateEntryFromFile(csvFile.FullName, csvFile.Name);
 
-            var output = TimeSpan.Parse(data[5]).TotalMilliseconds.ToString() + ",";
-            output += (Decimal.Parse(data[3].Replace(".", ",")) * 10000m).ToString("#.") + ",";
-            output += Int64.Parse(data[4]) + Environment.NewLine;
+                csvFile.Delete();
+            });
 
-            File.AppendAllText(csvfile, output);
+            Console.WriteLine("Done!");
         }
-
-        private static async Task WriteQuantConnectDailyFile(string line)
+               
+        private static async Task WriteQuantConnectTickFile()
         {
-            if (Filter(line)) return;
+            FolderCleanUp("tick");
 
-            var dir = Directory.CreateDirectory(_leanequityfolder + @"daily\");
-            var file = dir.FullName + line.Substring(12, 12).Trim().ToLower() + ".csv";
-            if (line.Substring(12, 12).Trim().Contains(" ")) return;
+            var selected = new string[] { "bbas3", "mrfg3", "petr4", "usim5", "vale5" }.ToList();
+                
+            var rootdir = Directory.CreateDirectory(_leanequityfolder + @"tick\");
+            
+            var subdirs = new Dictionary<string, string>();
+            selected.ForEach(s => subdirs.Add(s, Directory.CreateDirectory(rootdir.FullName + s + @"\").FullName));
 
-            var output = line.Substring(2, 8) + ",";
-            output += Convert.ToInt64(line.Substring(56, 13)) * 100 + ",";
-            output += Convert.ToInt64(line.Substring(69, 13)) * 100 + ",";
-            output += Convert.ToInt64(line.Substring(82, 13)) * 100 + ",";
-            output += Convert.ToInt64(line.Substring(108, 13)) * 100 + ",";
-            output += Convert.ToInt64(line.Substring(152, 18)) + "\r\n";
+            var zipfiles = new DirectoryInfo(_rawdatafolder).GetFiles("NEG*zip").ToList()
+                .FindAll(f => DateTime.ParseExact(f.Name.Substring(4, 8),"yyyyMMdd",_langus) >= new DateTime(2011,10,1));
 
-            File.AppendAllText(file, output);
+            Console.WriteLine("\r\n" + zipfiles.Count + " zip files with raw data."); 
+
+            foreach (var zipfile in zipfiles)
+            {
+                var starttime = DateTime.Now;
+
+                using (var zip2open = new FileStream(zipfile.FullName, FileMode.Open, FileAccess.Read))
+                using (var archive = new ZipArchive(zip2open, ZipArchiveMode.Read))
+                    foreach (var entry in archive.Entries)
+                        using (var file = new StreamReader(entry.Open()))
+                        {
+                            var lastdate = "20050101";
+                            var output = new List<string[]>();
+                            
+                            while (!file.EndOfStream)
+                            {
+                                var csv = (await file.ReadLineAsync()).Split(';');
+                                if (csv.Length < 5 || !selected.Contains(csv[1] = csv[1].Trim().ToLower())) continue;
+                                csv[0] = csv[0].Replace("-", "");
+                                csv[2] = TimeSpan.Parse(csv[5], _langus).TotalMilliseconds.ToString("0.000", _langus) + "," +
+                                    (10000 * decimal.Parse(csv[3], _langus)).ToString("0") + "," + Convert.ToInt64(csv[4]);
+
+                                if (output.Count == 0) lastdate = csv[0];
+                                if (csv[0] == lastdate) { output.Add(csv); continue; }
+                                
+                                // Write QuantConnect zip file
+                                output.GroupBy(o => o[1]).ToList().ForEach(s =>
+                                {
+                                    var csvFile = new FileInfo(lastdate + "_" + s.Key + "_Trade_Tick.csv");
+                                    File.WriteAllLines(csvFile.FullName, s.Select(d => d[2]));
+
+                                    var newFile = subdirs[s.Key] + lastdate + "_trade.zip";
+                                    using (var z = new FileStream(newFile, FileMode.Create))
+                                    using (var a = new ZipArchive(z, ZipArchiveMode.Create))
+                                        a.CreateEntryFromFile(csvFile.FullName, csvFile.Name);
+
+                                    csvFile.Delete();
+                                });
+                                output.Clear();
+                            }
+                        }
+
+                Console.WriteLine((((1 + zipfiles.IndexOf(zipfile)) / (double)zipfiles.Count)).ToString("0.00%\t", _langus) +
+                    zipfile.Name.ToUpper() + " read in " + (DateTime.Now - starttime).ToString(@"mm\:ss"));
+            }
         }
-
+       
         private static async Task WriteQuantConnectFactorFiles()
         {
+            FolderCleanUp("factor_files");
+            
             var codes = new List<int>();
             var symbols = new List<string>();
+            var alphabet = new List<char>();
             var startdate = new DateTime(1998, 1, 1);
-            var alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".ToList();
-            //alphabet.Clear();
+            alphabet.Clear();
+
+            #region GetSymbols
+            new DirectoryInfo(_leanequityfolder + @"daily\").GetFiles("*.zip").ToList().ForEach(z =>
+            {
+                var symbol = z.Name.Replace(".zip", "").ToUpper();
+                if (!alphabet.Contains(symbol[0])) alphabet.Add(symbol[0]);
+                if (symbol.Length > 3 && !symbols.Contains(symbol)) symbols.Add(symbol);
+            });
+            #endregion
 
             #region GetCodes
+            if (File.Exists("exception.txt"))
+            {
+                File.ReadAllLines("exception.txt").ToList().ForEach(l =>
+                    {
+                        int code;
+                        if (int.TryParse(l.Split(';')[0], out code) && code > 0 && !codes.Contains(code)) codes.Add(code);
+                    });
+                File.Delete("exception.txt");
+                alphabet.Clear();
+            }
             foreach (var letter in alphabet)
             {
                 var url = "http://www.bmfbovespa.com.br/cias-listadas/empresas-listadas/BuscaEmpresaListada.aspx?Letra=";
@@ -283,19 +431,21 @@ namespace Bovespa2QuantConnect
                     Console.WriteLine(e.Message);
                 }
             }
+            if (codes.Contains(23264)) codes.Add(18112);
             codes = codes.OrderBy(i => i).ToList();
             #endregion
 
-            #region GetSymbols
-            new DirectoryInfo(_leanequityfolder + @"daily\").GetFiles("*.zip").ToList().ForEach(z =>
-                {
-                    var symbol = z.Name.Replace(".zip", "").ToUpper();
-                    if (symbol.Length > 3 && !symbols.Contains(symbol)) symbols.Add(symbol);
-                });
-            #endregion
+            if (!codes.Contains(18112)) codes.Add(18112);
+            //if (!codes.Contains(4170)) codes.Add(4170); // VALE
+            //if (!codes.Contains(9512)) codes.Add(9512); // PETR
 
-            if (!codes.Contains(4170)) codes.Add(4170); // VALE
-            if (!codes.Contains(9512)) codes.Add(9512); // PETR
+            #region Get Ticker Merge
+            var mergefile = new FileInfo("MergeEvent.txt");
+            if (mergefile.Exists)
+            { 
+                
+            }
+            #endregion
 
             foreach (var code in codes)
             {
@@ -303,7 +453,7 @@ namespace Bovespa2QuantConnect
                 var page0 = string.Empty;
                 var page1 = string.Empty;
                 var page2 = string.Empty;
-                
+
                 #region Read pages
                 try
                 {
@@ -318,13 +468,13 @@ namespace Bovespa2QuantConnect
 
                         using (var response = await client.GetAsync(url1))
                         using (var content = response.Content) page1 = await content.ReadAsStringAsync();
-                        
+
                         using (var response = await client.GetAsync(url2))
-                        using (var content = response.Content) page2 = await content.ReadAsStringAsync();                     
+                        using (var content = response.Content) page2 = await content.ReadAsStringAsync();
                     }
                 }
                 catch (Exception e) { Console.WriteLine(e.Message); }
-                
+
                 #endregion
 
                 if ((index = page0.IndexOf("Papel=") + 6) < 6) continue;
@@ -337,15 +487,16 @@ namespace Bovespa2QuantConnect
                 if (!page2.Contains("Proventos em Ações")) page2 = string.Empty;
                 if ((index = page2.IndexOf("<tbody>")) >= 0) page2 = page2.Substring(0, page2.IndexOf("</tbody>")).Substring(index);
 
-                var thiscodesymbols = symbols.Intersect(page0.Split(',')).ToList();
                 var kind = new Dictionary<int, string> { { 3, "ON" }, { 4, "PN" }, { 5, "PNA" }, { 6, "PNB" }, { 7, "PNC" }, { 8, "PND" }, { 11, "UNT" } };
+                var thiscodesymbols = symbols.Intersect(page0.Split(',')).ToList();
+                if (thiscodesymbols.Count == 0) continue;
 
                 foreach (var symbol in thiscodesymbols)
                 {
                     var date = new DateTime();
                     var keys = new List<DateTime>();
                     var fkeys = new List<DateTime>();
-                    
+
                     var events = new Dictionary<DateTime, decimal>();
                     var factors = new Dictionary<DateTime, decimal>();
 
@@ -357,7 +508,7 @@ namespace Bovespa2QuantConnect
                     {
                         index = 0;
 
-                        while ((index = page1.IndexOf(">" + kind[int.Parse(symbol.Substring(4))] + "<", index)) > 0)
+                        while (page1.Length > 0 && (index = page1.IndexOf(">" + kind[int.Parse(symbol.Substring(4))] + "<", index)) > 0)
                         {
                             index++;
                             var idx = 0;
@@ -366,12 +517,15 @@ namespace Bovespa2QuantConnect
 
                             while ((idx = row.IndexOf("\">", idx) + 2) >= 2) cols.Add(row.Substring(idx, row.IndexOf("<", idx) - idx));
 
+                            var currentcomprice = 0m;
+                            if (!decimal.TryParse(cols[5], NumberStyles.Any, _langbr, out currentcomprice) || currentcomprice <= 0) continue;
+
                             if (!DateTime.TryParseExact(cols[4], "dd/MM/yyyy", _langbr, DateTimeStyles.None, out date) &&
                                 !DateTime.TryParseExact(cols[3], "dd/MM/yyyy", _langbr, DateTimeStyles.None, out date))
                                 date = DateTime.ParseExact(cols[0], "dd/MM/yyyy", _langbr, DateTimeStyles.None);
                             if (date < startdate) continue;
 
-                            if (!comprice.ContainsKey(date)) comprice.Add(date, decimal.Parse(cols[5], _langbr));
+                            if (!comprice.ContainsKey(date)) comprice.Add(date, currentcomprice);
 
                             if (dividend.ContainsKey(date))
                                 dividend[date] += decimal.Parse(cols[1], _langbr);
@@ -397,7 +551,7 @@ namespace Bovespa2QuantConnect
                     }
                     catch (Exception e)
                     {
-                        Console.WriteLine(e.Message);
+                        File.AppendAllText("exception.txt", code + ";Dividends;" + e.Message + "\r\n");
                     }
                     #endregion
 
@@ -406,7 +560,7 @@ namespace Bovespa2QuantConnect
                     {
                         index = 0;
 
-                        while ((index = page2.IndexOf("<tr", index + 1)) > 1)
+                        while (page2.Length > 1 && (index = page2.IndexOf("<tr", index + 1)) > 1)
                         {
                             index++;
                             var idx = 0;
@@ -422,7 +576,9 @@ namespace Bovespa2QuantConnect
 
                             cols = cols[4].Split('/').ToList();
 
-                            var event0 = decimal.Parse(cols[0]);
+                            var event0 = 0m;
+                            if (!decimal.TryParse(cols[0], NumberStyles.Any, _langbr, out event0) || event0 <= 0) continue;
+
                             if (cols.Count == 1) event0 = 1 / (1m + event0 / 100m);
                             if (cols.Count == 2)
                             {
@@ -440,7 +596,7 @@ namespace Bovespa2QuantConnect
                     }
                     catch (Exception e)
                     {
-                        Console.WriteLine(e.Message);
+                        File.AppendAllText("exception.txt", code + ";CorpEvents;" + e.Message + "\r\n");
                     }
                     #endregion
 
@@ -457,76 +613,74 @@ namespace Bovespa2QuantConnect
                     if (File.Exists(outputfile)) File.Delete(outputfile);
 
                     foreach (var key in keys)
-                        File.AppendAllText(outputfile, key.ToString("yyyyMMdd") + "," + 
+                        File.AppendAllText(outputfile, key.ToString("yyyyMMdd") + "," +
                             Math.Round(factors[key], 9).ToString(_langus) + "," + Math.Round(events[key], 9).ToString(_langus) + "\r\n");
                     #endregion
                 }
-                Console.WriteLine(DateTime.Now + " " + ((1 + codes.IndexOf(code)) / (double)codes.Count).ToString("0.00%"));             
+                #region Write codes and respective symbols
+                var output = code.ToString("00000") + ";";
+                thiscodesymbols.ForEach(s => output += s + ";");
+                output = output.Substring(0, output.Length - 1) + "\r\n";
+                File.AppendAllText("codes.txt", output);
+                #endregion
+
+                Console.WriteLine(DateTime.Now.TimeOfDay + " " + ((1 + codes.IndexOf(code)) / (double)codes.Count).ToString("0.00%"));
             }
-            Console.WriteLine("Done!");
+            Console.WriteLine(DateTime.Now.TimeOfDay + " Done!");
         }
 
-        private static async Task WriteNelogicaFiles()
+        private static async Task WriteNelogicaFiles(bool daily)
         {
-            var factorfilesdir = _leanequityfolder + @"factor_files\";
-            var dirs = new DirectoryInfo(_leanequityfolder + @"minute\").GetDirectories().ToList();
-            dirs.Clear();
-            dirs.Add(new DirectoryInfo(_leanequityfolder + @"daily\"));
-            Console.WriteLine();
+            var dirs = new List<DirectoryInfo>();
+            
+            if (daily)
+                dirs.Add(new DirectoryInfo(_leanequityfolder + @"daily\"));
+            else
+                dirs.AddRange(new DirectoryInfo(_leanequityfolder + @"minute\").GetDirectories());
             
             foreach (var dir in dirs)
             {
                 var zipfiles = dir.GetFiles("*.zip");
- 
+
                 foreach (var zipfile in zipfiles)
                 {
                     var index = zipfile.Name.IndexOf('.');
                     if (index < 4) continue;
 
-                    var output = new List<string>();
                     var symbol = zipfile.Name.Substring(0, index);
-                    var period = dir.FullName.Contains("daily") ? "_Diário" : "1min";
-                    var outputfile = symbol.ToUpper() + period + ".csv";
-                    var factorfile = factorfilesdir + symbol + ".csv";
+                    var outputfile = symbol.ToUpper() + (daily ? "_Diário" : "1min") + ".csv";
+                    var factors = ReadFactorFile(_leanequityfolder + @"factor_files\" + symbol + ".csv");
                     
-                    // Check if we have the file with the factors
-                    if (!File.Exists(factorfile)) continue;
-                    if (!File.Exists(outputfile)) File.Delete(outputfile);
-
-                    var factors = ReadFactorFile(factorfile);                        
-                    
-                    using (var zip2open = new FileStream(zipfile.FullName, FileMode.Open, FileAccess.Read))
-                    using (var archive = new ZipArchive(zip2open, ZipArchiveMode.Read))
-                    using (var file = new StreamReader(archive.Entries.First().Open()))
+                    File.WriteAllLines(outputfile, (await ReadZipFile(zipfile)).Select(l =>
                     {
-                        while (!file.EndOfStream)
-                        {
-                            var line = await file.ReadLineAsync();
-                            var data = line.Split(',');
+                        var data = l.Split(',');
+                        var date = DateTime.ParseExact(data[0], "yyyyMMdd", _langus);
+                        var factordate = factors.Where(kvp => kvp.Key >= date).First().Key;
+                        var factor = factors[factordate];
 
-                            var date = DateTime.ParseExact(data[0], "yyyyMMdd", _langus);
-                            var factordate = factors.Where(kvp => kvp.Key >= date).First().Key;
-                            var factor = factors[factordate];
+                        return symbol.ToUpper() + ";" + date.ToString("dd/MM/yyyy") + ";" +
+                            Math.Round(decimal.Parse(data[1]) * factor / 10000, 2).ToString("0.00", _langbr) + ";" +
+                            Math.Round(decimal.Parse(data[2]) * factor / 10000, 2).ToString("0.00", _langbr) + ";" +
+                            Math.Round(decimal.Parse(data[3]) * factor / 10000, 2).ToString("0.00", _langbr) + ";" +
+                            Math.Round(decimal.Parse(data[4]) * factor / 10000, 2).ToString("0.00", _langbr) + ";" + data[5];
 
-                            output.Add(symbol.ToUpper() + ";" +
-                                date.ToString("dd/MM/yyyy") + ";" +
-                                Math.Round(decimal.Parse(data[1]) * factor / 10000, 2).ToString("0.00", _langbr) + ";" +
-                                Math.Round(decimal.Parse(data[2]) * factor / 10000, 2).ToString("0.00", _langbr) + ";" +
-                                Math.Round(decimal.Parse(data[3]) * factor / 10000, 2).ToString("0.00", _langbr) + ";" +
-                                Math.Round(decimal.Parse(data[4]) * factor / 10000, 2).ToString("0.00", _langbr) + ";" +
-                                data[5] + "\r\n");  
-                        }
-                    }
-                    for (var i = output.Count - 1; i > 0; i--) File.AppendAllText(outputfile, output[i]);
+                    }).ToArray());
                 }
+                Console.WriteLine("\r\n" + dir.FullName + ": " + zipfiles.Count() + " files!");
             }
-            Console.WriteLine("Done!");
+            Console.WriteLine(dirs.Count + " folder(s)!" + "Done!");
         }
 
-        private static SortedList<DateTime,decimal> ReadFactorFile(string file)
+        private static SortedList<DateTime, decimal> ReadFactorFile(string file)
         {
             var factors = new SortedList<DateTime, decimal>();
-
+            
+            if (!File.Exists(file))
+            {
+                factors.Add(new DateTime(2049, 12, 31), 1m);
+                return factors;
+            }
+       
             var lines = File.ReadAllLines(file);
             foreach (var line in lines)
             {
@@ -540,21 +694,34 @@ namespace Bovespa2QuantConnect
 
         }
 
-        private static async Task MakeMinuteFilesFromTickFiles()
+        private static async Task WriteQuantConnectMinuteFile(int minutes)
         {
-            Console.WriteLine();
+            FolderCleanUp("minute");
+
             var dirs = new DirectoryInfo(_leanequityfolder + @"tick\").GetDirectories();
 
             foreach (var dir in dirs)
             {
-                var files = dir.GetFiles("*.csv");
+                var zipfiles = dir.GetFiles("*.zip");
 
-                if (files.Count() == 0) continue;
+                if (zipfiles.Count() == 0) continue;
                 var outdir = Directory.CreateDirectory(dir.FullName.Replace("tick", "minute"));
 
-                foreach (var file in files)
+                foreach (var zipfile in zipfiles)
                 {
-                    var lines = File.ReadAllLines(file.FullName, Encoding.ASCII).ToList();
+                    using (var zip2open = new FileStream(zipfile.FullName, FileMode.Open, FileAccess.Read))
+                    using (var archive = new ZipArchive(zip2open, ZipArchiveMode.Read))
+                        foreach (var entry in archive.Entries)
+                            using (var file = new StreamReader(entry.Open()))
+                            {
+                                var data = (await file.ReadToEndAsync()).Split('\n');
+
+                                var line = data[0].Split(',');
+                                var lon = Convert.ToInt64(10 * decimal.Parse(line[0]));
+                                var ttt = new TimeSpan(Convert.ToInt64(10 * decimal.Parse(line[0])));
+                                
+                            }
+                    var lines = File.ReadAllLines(zipfile.FullName, Encoding.ASCII).ToList();
 
                     var lastmin = (new DateTime()).AddMilliseconds(Convert.ToInt32(lines.Last().Split(',')[0]));
 
@@ -580,7 +747,7 @@ namespace Bovespa2QuantConnect
                             prev.Last().Split(',')[1] + "," +
                             prev.Sum(p => Convert.ToInt32(p.Split(',')[2])).ToString() + Environment.NewLine;
 
-                        var newfile = file.FullName.Replace("tick", "minute").Replace("Tick", "Minute");
+                        var newfile = zipfile.FullName.Replace("tick", "minute").Replace("Tick", "Minute");
                         File.AppendAllText(newfile, bar);
 
                         Console.WriteLine(DateTime.Now + ": " + newfile + " criado.");
@@ -589,55 +756,275 @@ namespace Bovespa2QuantConnect
 
             }
         }
-
-        private static bool Filter(string line)
+   
+        private static async Task SearchTickerChange()
         {
-            int type;
-            if (!int.TryParse(line.Substring(16, 3), out type) || type < 3 || (type > 8 && type != 11)) return true;
+            var index = 0;
+            var page = string.Empty;
+            var cancel = new List<string>();
+            var merged = new List<string>();
 
-            line = line
-                .Replace("BMEF", "BVMF")
-                .Replace("TLPP", "VIVT")
-                .Replace("VNET", "CIEL")
-                .Replace("VCPA", "FIBR")
-                .Replace("PRGA", "BRFS")
-                .Replace("AMBV4", "ABEV3")
-                .Replace("DURA4", "DTEX3");
+            #region Get Cancelled and Incorporated companies from BmfBovespa site
+            try
+            {
+                using (var client = new HttpClient())
+                {
+                    var codes = new List<string>();
 
-            return false;
+                    using (var response = await client.GetAsync("http://www.bmfbovespa.com.br/cias-Listadas/empresas-com-registro-cancelado/ResumoEmpresasComRegistroCancelado.aspx?razaoSocial="))
+                    using (var content = response.Content)
+                    {
+                        page = await content.ReadAsStringAsync();
+                        if ((index = page.IndexOf("<tbody>")) >= 0) page = page.Substring(0, page.IndexOf("</tbody>")).Substring(index);
+
+                        index = 0;
+                        while (page.Length > 1 && (index = page.IndexOf("codigo=", index) + 7) > 7)
+                        {
+                            var code = page.Substring(index, 4);
+                            if (!codes.Contains(code)) codes.Add(code);
+                        }
+                    }
+
+                    foreach (var code in codes)
+                    {
+                        using (var response = await client.GetAsync("http://www.bmfbovespa.com.br/cias-Listadas/empresas-com-registro-cancelado/DetalheEmpresasComRegistroCancelado.aspx?codigo=" + code))
+                        using (var content = response.Content)
+                        {
+                            page = await content.ReadAsStringAsync();
+                            if ((index = page.IndexOf("lblMotivo")) < 0) { Console.Write(" " + code); continue; }
+                            page = page.Substring(0, page.IndexOf("</tbody>")).Substring(index);
+                            if ((index = page.IndexOf(">")) > 0) page = code + page.Substring(0, page.IndexOf("<")).Substring(index);
+                            if (page.ToLower().Contains("incorporad") || code == "SUBA") merged.Add(page); else cancel.Add(page);
+                        }
+                    }
+                    
+                }
+            }
+            catch (Exception e) { Console.WriteLine("\r\n" + page.Substring(0, 20) + "\r\n" + e.Message); }
+            #endregion
+            File.WriteAllLines("Canceladas.txt", cancel.OrderBy(x => x));
+            File.WriteAllLines("Incorporadas.txt", merged.OrderBy(x => x));
+            cancel = cancel.Select(c => c.Substring(0, 4)).ToList();
+
+            TickerChange.Keys.ToList().ForEach(k => { if (!cancel.Contains(k.Substring(0, 4))) cancel.Add(k.Substring(0, 4)); });
+            TickerChange.Values.ToList().ForEach(k => { if (!cancel.Contains(k.Substring(0, 4))) cancel.Add(k.Substring(0, 4)); });
+            cancel = cancel.Select(c => c.ToLower()).OrderBy(k => k).ToList();
+
+            var files = new DirectoryInfo(_leanequityfolder + @"daily\").GetFiles("*.csv").ToList();
+            files.RemoveAll(f => cancel.Contains(f.Name.Substring(0, 4)));
+            if (files.Count == 0) return;
+
+            var tradingdays = TradingDays();
+            var firstday = new Dictionary<string, DateTime>();
+            var lasttday = new Dictionary<string, DateTime>();
+
+            foreach (var file in files)
+            {            
+                var data = File.ReadAllLines(file.FullName).OrderBy(d => d).ToList();
+                var lday = DateTime.ParseExact(data.Last().Substring(0, 8), "yyyyMMdd", _langus);
+                var fday = DateTime.ParseExact(data.First().Substring(0, 8), "yyyyMMdd", _langus);
+
+                File.WriteAllLines(file.FullName, data);
+
+                lasttday.Add(file.Name, lday);
+                firstday.Add(file.Name, fday);                
+            }
+            
+            foreach (var key in firstday.Keys)
+            {
+                var results = lasttday.Where(d => 
+                    {
+                        var fday = firstday[key];
+                        var pday = firstday[key].AddDays(-1);
+                        while (!tradingdays.Result.Contains(pday.ToString("yyyyMMdd", _langus))) pday = pday.AddDays(-1);
+                        var ltfday = d.Value < fday;
+                        var gtfday5 = d.Value >= pday;
+
+                        return ltfday && gtfday5;
+                    })
+                    .ToDictionary(x => x.Key, y => y.Value);
+
+                foreach (var result in results)
+                {
+                    var data = File.ReadAllLines(_leanequityfolder + @"daily\" + result.Key).OrderBy(d => d).ToList();
+                    
+                    // We count how many trading day there were between the first and the last days
+                    // and calculate the frequency the symbol was traded
+                    var count1 =
+                        (double)(tradingdays.Result.IndexOf(data.Last().Substring(0, 8))) -
+                        (double)(tradingdays.Result.IndexOf(data.First().Substring(0, 8)));
+
+                    var freq1 = count1 == 0 ? 0 : (data.Count - 1) / count1;
+
+                    data.RemoveAll(d => DateTime.ParseExact(d.Substring(0, 8), "yyyyMMdd", _langus) < new DateTime(result.Value.Year - 1, 1, 1));
+
+                    var count2 =
+                        (double)(tradingdays.Result.IndexOf(data.Last().Substring(0, 8))) -
+                        (double)(tradingdays.Result.IndexOf(data.First().Substring(0, 8)));
+
+                    var freq2 = count2 == 0 ? 0 : (data.Count - 1) / count2;
+
+                    if (Math.Max(freq1, freq2) < .5) continue;
+
+                    var output = "{\"" + key.Replace(".csv", "\", \"") + result.Key.Replace(".csv", "\"},");
+
+                    var outvalue = string.Empty;
+                    if (TickerChange.TryGetValue(key.Replace(".csv", "").ToUpper(), out outvalue))
+                        if (outvalue == result.Key.Replace(".csv", "").ToUpper())
+                        {
+                            output += "//";
+                            File.AppendAllText("mergedic.txt", output.ToUpper() + "\r\n");
+                        }
+                    
+                    File.AppendAllText("merge.txt", output.ToUpper() + "\r\n");
+                }                            
+            }
+            Console.WriteLine(" Done!");
         }
 
-        static void ZipALLRaw()
+        private static void MergeFiles(string folder)
         {
-            Console.WriteLine();
-            var dirs = new DirectoryInfo(_leanequityfolder + @"minute\").GetDirectories().ToList();
-            dirs.AddRange(new DirectoryInfo(_leanequityfolder + @"tick\").GetDirectories().ToList());
-            dirs.Clear();
-            dirs.Add(new DirectoryInfo(_leanequityfolder + @"daily\"));
+            var files = new DirectoryInfo(_leanequityfolder + folder + @"\").GetFiles("*.csv").ToList();
+            if (files.Count == 0) return;
 
+            var symbols = TickerChange.Keys.Intersect(TickerChange.Values).ToList();
+            var leg1 = TickerChange.Where(x => symbols.Contains(x.Key)).ToDictionary(x => x.Key, y => y.Value);
+            var leg2 = TickerChange.Where(x => symbols.Contains(x.Value)).ToDictionary(x => x.Key, y => y.Value);
+            foreach (var kvp in leg1.Concat(leg2)) TickerChange.Remove(kvp.Key);
+            TickerChange = TickerChange.Concat(leg1.Concat(leg2)).ToDictionary(x => x.Key, y => y.Value);
+
+            var mergeevent = new FileInfo("MergeEvent.txt");
+            if (mergeevent.Exists) mergeevent.Delete();
+            
+            foreach (var kvp in TickerChange)
+            {
+                var newfile = files.Find(f => f.Name.Contains(kvp.Key.ToLower()));
+                var oldfile = files.Find(f => f.Name.Contains(kvp.Value.ToLower()));
+
+                if (!oldfile.Exists) continue;
+
+                var mergeddata = File.ReadAllLines(oldfile.FullName).OrderBy(d => d).ToList();
+                File.AppendAllText(mergeevent.FullName, kvp.Key + "," + kvp.Value + "," + mergeddata.Last().Substring(0, 8) + ",1\r\n");
+
+                if (newfile.Exists) mergeddata.AddRange(File.ReadAllLines(newfile.FullName));
+
+                File.WriteAllLines(newfile.Name, mergeddata.OrderBy(d => d));
+                //File.Delete(oldfile.FullName);
+            }
+            foreach (var symbol in symbols) { File.Delete(symbol.ToLower() + ".csv"); }
+            Console.WriteLine(" Done!");
+        }
+
+        static void ZipALLRaw(string folder)
+        {
+            var dirs = new List<DirectoryInfo>();
+            if (folder == "daily")
+                dirs.Add(new DirectoryInfo(_leanequityfolder + @"daily\"));
+            else
+                dirs.AddRange(new DirectoryInfo(_leanequityfolder + folder + @"\").GetDirectories());
+            
             foreach (var dir in dirs)
             {
                 var files = dir.GetFiles("*.csv");
 
                 foreach (var file in files)
                 {
-                    var zipfile = dir.FullName + @"\" + file.Name.Substring(0, 9) + "trade.zip";
-                    if (dir.FullName.Contains("daily")) zipfile = file.FullName.Replace(".csv", ".zip");
+                    var output = file.Name;
 
-                    File.WriteAllLines(file.FullName, File.ReadAllLines(file.FullName).OrderBy(d => d));
+                    var alllines = File.ReadAllLines(file.FullName).OrderBy(d => d).ToList();
 
-                    using (var z = new FileStream(zipfile, FileMode.Create))
-                    using (var a = new ZipArchive(z, ZipArchiveMode.Create))
-                        a.CreateEntryFromFile(file.FullName, file.Name);
+                    var zipfile = folder == "daily"
+                        ? file.FullName.Replace(".csv", ".zip")
+                        : dir.FullName + @"\" + file.Name.Substring(0, 9) + "trade.zip";
 
-                    //
+                    if (DateTime.ParseExact(alllines.Last().Substring(0, 8), "yyyyMMdd", _langus) > new DateTime(1999, 1, 1))
+                    {
+                        output += " zipped and";
+                        File.WriteAllLines(file.FullName, alllines);
+
+                        using (var z = new FileStream(zipfile, FileMode.Create))
+                        using (var a = new ZipArchive(z, ZipArchiveMode.Create))
+                            a.CreateEntryFromFile(file.FullName, file.Name);
+                    }
+
+                    Console.WriteLine(output + " deleted. Last entry: " + File.ReadAllLines(file.FullName).Last().Substring(0, 8));
                     File.Delete(file.FullName);
-                    Console.WriteLine(file.Name + " zipped and deleted");
                 }
+            }
+        }
 
+        private static async Task<List<string>> TradingDays()
+        {            
+            var ifile = new FileInfo(_leanequityfolder.Replace("equity\\bra", "market-hours") + "holidays-bra.csv");
+            if (!ifile.Exists) await WriteQuantConnectHolidayFile();
 
+            var data = File.ReadAllLines(ifile.FullName).ToList();
+            data.RemoveAt(0);   // Remove header
+
+            var tradingdays = new List<DateTime>();
+            var holidays = data.Select(d => DateTime.ParseExact(d, "yyyy, MM, dd", _langus));
+            
+            var date = holidays.First();
+            while (date < holidays.Last()) tradingdays.Add(date = date.AddDays(1));
+
+            tradingdays = tradingdays.Except(holidays).ToList();
+            tradingdays.RemoveAll(d => d.DayOfWeek == DayOfWeek.Saturday || d.DayOfWeek == DayOfWeek.Sunday);
+
+            return tradingdays.Select(d => d.ToString("yyyyMMdd")).ToList();
+        }
+
+        #region Utils
+        private static void FolderCleanUp(string folder)
+        {
+            // Delete all CSV files
+            var files = new DirectoryInfo(_leanequityfolder + folder + @"\").GetFiles("*.csv").ToList();
+            foreach (var x in files) File.Delete(x.FullName);
+
+            // Delete the folders
+            var dires = new DirectoryInfo(_leanequityfolder + folder + @"\").GetDirectories().ToList();
+            foreach (var x in dires) Directory.Delete(x.FullName, true);
+        }
+
+        private static bool Filter(string line)
+        {
+            int type;
+
+            return !int.TryParse(line.Substring(16, 3), out type) || type < 3 || (type > 8 && type != 11)
+                || line.Substring(12, 12).Trim().Contains(" ");
+        }
+
+        private static async Task<List<string>> ReadZipFile(FileInfo zipfile, List<string> selected)
+        {
+            var data = new List<string>();
+
+            if (!zipfile.Exists)
+            {
+                Console.WriteLine(zipfile.Name + "does not exist!");
+                return data;
             }
 
+            try
+            {
+                using (var zip2open = new FileStream(zipfile.FullName, FileMode.Open, FileAccess.Read))
+                using (var archive = new ZipArchive(zip2open, ZipArchiveMode.Read))
+                    foreach (var entry in archive.Entries)
+                        using (var file = new StreamReader(entry.Open()))
+                            while (!file.EndOfStream)
+                            {
+                                var line = await file.ReadLineAsync();
+                                if (selected.Count == 0 || selected.Any(s => line.Contains(s)))
+                                    data.Add(line);
+                            }
+            }
+            catch (Exception e) { Console.WriteLine(e.Message); }
+
+            return data;
         }
+
+        private static async Task<List<string>> ReadZipFile(FileInfo zipfile)
+        {
+            return await ReadZipFile(zipfile, selected: new List<string>());
+        }
+        #endregion
     }
-}                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
+}
