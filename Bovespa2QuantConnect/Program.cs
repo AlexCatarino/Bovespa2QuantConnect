@@ -118,160 +118,75 @@ namespace Bovespa2QuantConnect
                 "2. Extract raw data from NEG* files to QC tick cvs file.\n" +
                 "3. Make QC minute cvs files from QC tick cvs file.\n" +
                 "4. Write QC factor files.\n" +
-                //"5. NotImplemented.\n" +
-                //"6. NotImplemented.\n" +
+                "5. Write QC holiday file.\n" +
+                "6. Write Nelogica file.\n" +
                 //"7. NotImplemented.\n" +
-                "8. Write QC holiday file.\n" +
-                "9. Zip all raw data\n" +
+                //"8. Write QC holiday file.\n" +
+                //"9. Zip all raw data\n" +
                 "0. Sair\n" +
                 ">> Insira opção: ";
             Console.Write(menu);
-            
+
             _rawdatafolder += @"\IBOV\Stock\";
             _leanequityfolder += @"\GitHub\Lean\Data\equity\bra\";
 
-            do
-            {
-                key = Console.ReadKey().KeyChar;
-                
-                switch (key)
-                {
-                    case '1':
-                        WriteQuantConnectDailyFile();
-                        break;
-                    case '2':
-                        WriteQuantConnectTickFile();
-                        break;
-                    case '3':
-                        WriteQuantConnectMinuteFile(1);
-                        break;
-                    case '4':
-                        WriteQuantConnectFactorFiles();
-                        break;
-                    case '5':
-                        WriteNelogicaFiles(true);
-                        break;
-                    case '6':
-                        //new string[] 
-                        //{ 
-                        //    //"ITUB4", "GGBR4", "CYRE3", "KROT3", "HGTX3", "MRFG3",  
-                        //    "BBAS3"//,"JBSS3",  "POMO4", "USIM5", "ALLL3",
-                        //}.ToList().ForEach(s => AdjustedPrice(s, new DateTime(2014, 5, 31)));
-                        break;
-                    case '7':
-                        //SearchTickerChange();
-                        MergeFiles("daily");
-                        break;
-                    case '8':
-                        WriteQuantConnectHolidayFile();
-                        break;
-                    case '9':
-                        ZipALLRaw("daily");
-                        break;
-                    default:
-                        Console.WriteLine("\nOpção Inválida!\n" + menu);
-                        break;
-                }
-
-            } while (key != '0');
-        }
-
-        private static async Task WriteQuantConnectHolidayFile()
-        {
-            // America/Sao_Paulo,bra,,equity,-,-,-,-,9.5,10,16.9166667,18,9.5,10,16.9166667,18,9.5,10,16.9166667,18,9.5,10,16.9166667,18,9.5,10,16.9166667,18,-,-,-,-
-            var holidays = new List<DateTime>();
-
-            var ofile = new FileInfo(_leanequityfolder.Replace("equity\\bra", "market-hours") + "holidays-bra.csv");
-            var output = ofile.Exists
-                ? File.ReadAllLines(ofile.FullName).ToList()
-                : (new string[] { "year, month, day" }).ToList();
-            var lastdate = output.Count == 1
-                ? new DateTime(1997, 12, 31)
-                : DateTime.ParseExact(output.Last(), "yyyy, MM, dd", _langus);
-
-            if (lastdate == new DateTime(DateTime.Now.Year, 12, 31)) return;
-
-            #region Get Holidays from Bovespa page
             try
             {
-                using (var client = new HttpClient())
-                using (var response = await client.GetAsync("http://www.bmfbovespa.com.br/pt-br/regulacao/calendario-do-mercado/calendario-do-mercado.aspx"))
-                using (var content = response.Content)
+                do
                 {
-                    var i = 0;
-                    var id = 0;
-                    var date = new DateTime();
-                    var page = await content.ReadAsStringAsync();
-                    page = page.Substring(0, page.IndexOf("linhaDivMais"));
+                    key = Console.ReadKey().KeyChar;
 
-                    var months = new string[] { 
-                        "Jan", "Fev", "Mar",
-                        "Abr", "Mai", "Jun",
-                        "Jul", "Ago", "Set",
-                        "Out", "Nov", "Dez" }.ToList();
-
-                    while (i < 12)
+                    switch (key)
                     {
-                        while (i < 12 && (id = page.IndexOf(">" + months[i + 0] + "<")) < 0) i++;
-                        var start = id + 1;
-
-                        while (i < 11 && (id = page.IndexOf(">" + months[i + 1] + "<")) < 0) i++;
-                        var count = id - start;
-
-                        months[i] = count > 0 ? page.Substring(start, count) : page.Substring(start);
-
-                        id = 0;
-                        while ((id = months[i].IndexOf("img/ic_", id) + 6) > 6)
-                        {
-                            id++;
-                            if (DateTime.TryParseExact(months[i].Substring(id, 2) + months[i].Substring(0, 3) + DateTime.Now.Year.ToString(),
-                                "ddMMMyyyy", _langbr, DateTimeStyles.None, out date))
-                                holidays.Add(date);
-                        }
-                        i++;
+                        case '1':
+                            WriteQuantConnectDailyFile();
+                            break;
+                        case '2':
+                            WriteQuantConnectTickFile();
+                            break;
+                        case '3':
+                            WriteQuantConnectBarFile("minute");
+                            break;
+                        case '4':
+                            WriteQuantConnectFactorFiles();
+                            break;
+                        case '5':
+                            WriteQuantConnectHolidayFile();
+                            break;
+                        case '6':
+                            WriteNelogicaFiles(false);
+                            break;
+                        case '7':
+                            //SearchTickerChange();
+                            MergeFiles("daily");
+                            break;
+                        case '8':
+                            break;
+                        case '9':
+                            break;
+                        default:
+                            Console.WriteLine("\nOpção Inválida!\n" + menu);
+                            break;
                     }
-                }
+
+                } while (key != '0');
             }
-            catch (Exception e) { Console.WriteLine(e.Message); }
-            #endregion
-
-            while (lastdate < holidays.First()) holidays.Add(lastdate = lastdate.AddDays(1));
-            holidays.RemoveAll(d => d.DayOfWeek == DayOfWeek.Saturday || d.DayOfWeek == DayOfWeek.Sunday);
-
-            var zipfiles = new DirectoryInfo(_rawdatafolder).GetFiles("COTAHIST_A*zip").Where(zf =>
+            catch (Exception e)
             {
-                var zfyear = int.Parse(zf.Name.Substring(zf.Name.Length - 8, 4));
-                return zfyear >= holidays.Min().Year && zfyear < holidays.Max().Year;
-            }).ToArray();
-
-            foreach (var zf in zipfiles)
-            {
-                var data = await ReadZipFile(zf);
-
-                // Remove header and footer
-                data.RemoveAt(0);
-                data.RemoveAt(data.Count - 1);
-
-                data.Select(l => DateTime.ParseExact(l.Substring(2, 8), "yyyyMMdd", _langus))
-                    .ToList().ForEach(d => holidays.Remove(d));
-                Console.Write("\r\n" + zf.Name + "\t" + holidays.Count);
-            }
-
-            output.AddRange(holidays.OrderBy(d => d).Select(d => d.ToString("yyyy, MM, dd")));
-            File.WriteAllText(ofile.FullName, string.Join("\r\n", output.ToArray()));
-            Console.WriteLine("\r\n" + ofile.Name + " written!");
+                Console.WriteLine("\n" + e.Message + "\n" + menu);
+            }        
         }
-        
+
         private static async Task WriteQuantConnectDailyFile()
         {
             FolderCleanUp("daily");
-                        
-            var outputdir = Directory.CreateDirectory(_leanequityfolder + @"daily\");
-            
-            var zipfiles = new DirectoryInfo(_rawdatafolder).GetFiles("COTAHIST_A*zip")
-                .Where(f => int.Parse(f.Name.Substring(f.Name.Length - 8, 4)) > 1997).ToList();
 
-            Console.WriteLine("\r\n" + zipfiles.Count + " zip files with raw data."); 
+            var outputdir = Directory.CreateDirectory(_leanequityfolder + @"daily\");
+
+            var zipfiles = new DirectoryInfo(_rawdatafolder).GetFiles("COTAHIST_A*zip")
+                .Where(f => f.Name.Substring(f.Name.Length - 8, 4).ToInt32() > 1997).ToList();
+
+            Console.WriteLine("\r\n" + zipfiles.Count + " zip files with raw data.");
 
             foreach (var zipfile in zipfiles)
             {
@@ -304,22 +219,41 @@ namespace Bovespa2QuantConnect
 
             Console.WriteLine("Done!");
         }
-               
+
         private static async Task WriteQuantConnectTickFile()
         {
             FolderCleanUp("tick");
 
             var selected = new string[] { "bbas3", "mrfg3", "petr4", "usim5", "vale5" }.ToList();
-                
+
             var rootdir = Directory.CreateDirectory(_leanequityfolder + @"tick\");
-            
+
             var subdirs = new Dictionary<string, string>();
             selected.ForEach(s => subdirs.Add(s, Directory.CreateDirectory(rootdir.FullName + s + @"\").FullName));
 
             var zipfiles = new DirectoryInfo(_rawdatafolder).GetFiles("NEG*zip").ToList()
-                .FindAll(f => DateTime.ParseExact(f.Name.Substring(4, 8),"yyyyMMdd",_langus) >= new DateTime(2011,10,1));
+                .FindAll(f => DateTime.ParseExact(f.Name.Substring(4, 8), "yyyyMMdd", _langus) >= new DateTime(2012, 6, 1));
 
-            Console.WriteLine("\r\n" + zipfiles.Count + " zip files with raw data."); 
+            Console.WriteLine("\r\n" + zipfiles.Count + " zip files with raw data.\t" + DateTime.Now);
+
+            #region Delegate routine to write data into QuantConnect zip file
+            Action<List<string[]>> zipIt = (List<string[]> o) =>
+            {
+                o.GroupBy(g => g[1]).ToList().ForEach(s =>
+                {
+                    var csvFile = new FileInfo(s.First()[0] + "_" + s.Key + "_Trade_Tick.csv");
+                    File.WriteAllLines(csvFile.FullName, s.Select(d => d[2]));
+
+                    var newFile = subdirs[s.Key] + s.First()[0] + "_trade.zip";
+                    using (var z = new FileStream(newFile, FileMode.Create))
+                    using (var a = new ZipArchive(z, ZipArchiveMode.Create))
+                        a.CreateEntryFromFile(csvFile.FullName, csvFile.Name);
+
+                    csvFile.Delete();
+                });
+                o.Clear();
+            };
+            #endregion
 
             foreach (var zipfile in zipfiles)
             {
@@ -332,44 +266,88 @@ namespace Bovespa2QuantConnect
                         {
                             var lastdate = "20050101";
                             var output = new List<string[]>();
-                            
+
                             while (!file.EndOfStream)
                             {
                                 var csv = (await file.ReadLineAsync()).Split(';');
                                 if (csv.Length < 5 || !selected.Contains(csv[1] = csv[1].Trim().ToLower())) continue;
                                 csv[0] = csv[0].Replace("-", "");
-                                csv[2] = TimeSpan.Parse(csv[5], _langus).TotalMilliseconds.ToString("0.000", _langus) + "," +
-                                    (10000 * decimal.Parse(csv[3], _langus)).ToString("0") + "," + Convert.ToInt64(csv[4]);
+                                csv[2] = TimeSpan.Parse(csv[5], _langus).TotalMilliseconds.ToString("0", _langus) + "," +
+                                    (10000 * csv[3].ToDecimal()).ToString("0") + "," + csv[4].ToInt64();
 
                                 if (output.Count == 0) lastdate = csv[0];
                                 if (csv[0] == lastdate) { output.Add(csv); continue; }
-                                
-                                // Write QuantConnect zip file
-                                output.GroupBy(o => o[1]).ToList().ForEach(s =>
-                                {
-                                    var csvFile = new FileInfo(lastdate + "_" + s.Key + "_Trade_Tick.csv");
-                                    File.WriteAllLines(csvFile.FullName, s.Select(d => d[2]));
 
-                                    var newFile = subdirs[s.Key] + lastdate + "_trade.zip";
-                                    using (var z = new FileStream(newFile, FileMode.Create))
-                                    using (var a = new ZipArchive(z, ZipArchiveMode.Create))
-                                        a.CreateEntryFromFile(csvFile.FullName, csvFile.Name);
-
-                                    csvFile.Delete();
-                                });
-                                output.Clear();
+                                zipIt.Invoke(output);   // Write QuantConnect zip file
                             }
+                            zipIt.Invoke(output);   // Write QuantConnect zip file
                         }
 
                 Console.WriteLine((((1 + zipfiles.IndexOf(zipfile)) / (double)zipfiles.Count)).ToString("0.00%\t", _langus) +
                     zipfile.Name.ToUpper() + " read in " + (DateTime.Now - starttime).ToString(@"mm\:ss"));
             }
+            Console.WriteLine("... exiting routine at " + DateTime.Now);
         }
-       
+
+        private static async Task WriteQuantConnectBarFile(string period)
+        {
+            FolderCleanUp(period);
+
+            var periodDbl = new Dictionary<string, double> { { "hour", 36e4 }, { "minute", 6e4 }, { "second", 1e3 } }[period];
+
+            var dirs = new DirectoryInfo(_leanequityfolder + @"tick\").GetDirectories().ToList();
+            Console.WriteLine("\r\n" + dirs.Count + " symbol directories to read");
+
+            foreach (var dir in dirs)
+            {
+                var zipfiles = dir.GetFiles("*.zip").ToList();
+                if (zipfiles.Count() == 0) continue;
+
+                var outdir = Directory.CreateDirectory(dir.FullName.Replace("tick", period));
+
+                foreach (var zipfile in zipfiles)
+                {
+                    var output = new List<string>();
+                    var data = await ReadZipFile(zipfile);
+
+                    var ticks = double.Parse(data.First().Split(',')[0]);
+                    ticks = ticks - ticks % 36e6 + 7.5 * 36e5;
+
+                    // Group by period
+                    data.GroupBy(d =>
+                        {
+                            var totalseconds = Math.Min(ticks, double.Parse(d.Split(',')[0], _langus));
+                            return (totalseconds - (totalseconds % periodDbl)).ToString(_langus);
+                        })
+                        // For each period, define bar and save
+                        .ToList().ForEach(t =>
+                        {
+                            var price = t.Select(l => l.Split(',')[1].ToDecimal()).ToList();
+                            var qunty = t.Select(l => l.Split(',')[2].ToDecimal()).ToList().Sum();
+                            var volfin = t.Select(l => { var d = l.Split(','); return d[1].ToDecimal() * d[2].ToDecimal(); }).ToList().Sum() / 10000;
+                            output.Add(t.Key + "," + price.First() + "," + price.Max() + "," + price.Min() + "," + price.Last() + "," + qunty + "," + volfin);
+                        });
+
+                    var newFile = zipfile.FullName.Replace("tick", period);
+                    var csvFile = new FileInfo(newFile.Replace("trade.zip", dir.Name + "_" + period + "_trade.csv"));
+
+                    File.WriteAllLines(csvFile.FullName, output);
+
+                    using (var z = new FileStream(newFile, FileMode.Create))
+                    using (var a = new ZipArchive(z, ZipArchiveMode.Create))
+                        a.CreateEntryFromFile(csvFile.FullName, csvFile.Name);
+
+                    csvFile.Delete();
+                }
+                Console.WriteLine(((1 + dirs.IndexOf(dir)) / (double)dirs.Count).ToString("0.00%") +
+                    "\t" + dir.Name.ToUpper() + ":\t" + zipfiles.Count + " days were read/written.");
+            }
+        }
+
         private static async Task WriteQuantConnectFactorFiles()
         {
             FolderCleanUp("factor_files");
-            
+
             var codes = new List<int>();
             var symbols = new List<string>();
             var alphabet = new List<char>();
@@ -398,32 +376,24 @@ namespace Bovespa2QuantConnect
             }
             foreach (var letter in alphabet)
             {
-                var url = "http://www.bmfbovespa.com.br/cias-listadas/empresas-listadas/BuscaEmpresaListada.aspx?Letra=";
-
                 try
                 {
-                    using (var client = new HttpClient())
-                    using (var response = await client.GetAsync(url + letter))
-                    using (var content = response.Content)
+                    var id = 0;
+                    var page = await ("http://www.bmfbovespa.com.br/cias-listadas/empresas-listadas/BuscaEmpresaListada.aspx?Letra=" + letter).Download();
+                    Console.Write(letter);
+
+                    while ((id = page.IndexOf("codigoCvm", id) + 9) > 9)
                     {
-                        var id = 0;
-                        var page = await content.ReadAsStringAsync();
-                        Console.Write(letter);
+                        id++;
+                        var code = 0;
+                        if (!int.TryParse(page.Substring(id, 5), out code) &&
+                            !int.TryParse(page.Substring(id, 4), out code) &&
+                            !int.TryParse(page.Substring(id, 3), out code) &&
+                            !int.TryParse(page.Substring(id, 2), out code))
+                            Console.WriteLine("");
 
-                        while ((id = page.IndexOf("codigoCvm", id) + 9) > 9)
-                        {
-                            id++;
-                            var code = 0;
-                            if (!int.TryParse(page.Substring(id, 5), out code) &&
-                                !int.TryParse(page.Substring(id, 4), out code) &&
-                                !int.TryParse(page.Substring(id, 3), out code) &&
-                                !int.TryParse(page.Substring(id, 2), out code))
-                                Console.WriteLine("");
-
-                            if (!codes.Contains(code)) codes.Add(code);
-                        }
+                        if (!codes.Contains(code)) codes.Add(code);
                     }
-
                 }
                 catch (Exception e)
                 {
@@ -442,41 +412,18 @@ namespace Bovespa2QuantConnect
             #region Get Ticker Merge
             var mergefile = new FileInfo("MergeEvent.txt");
             if (mergefile.Exists)
-            { 
-                
+            {
+
             }
             #endregion
 
             foreach (var code in codes)
             {
                 var index = 0;
-                var page0 = string.Empty;
-                var page1 = string.Empty;
-                var page2 = string.Empty;
-
-                #region Read pages
-                try
-                {
-                    using (var client = new HttpClient())
-                    {
-                        var url0 = "http://www.bmfbovespa.com.br/pt-br/mercados/acoes/empresas/ExecutaAcaoConsultaInfoEmp.asp?CodCVM=" + code;
-                        var url1 = "http://www.bmfbovespa.com.br/Cias-Listadas/Empresas-Listadas/ResumoProventosDinheiro.aspx?codigoCvm=" + code;
-                        var url2 = url1.Replace("ProventosDinheiro", "EventosCorporativos");
-
-                        using (var response = await client.GetAsync(url0))
-                        using (var content = response.Content) page0 = await content.ReadAsStringAsync();
-
-                        using (var response = await client.GetAsync(url1))
-                        using (var content = response.Content) page1 = await content.ReadAsStringAsync();
-
-                        using (var response = await client.GetAsync(url2))
-                        using (var content = response.Content) page2 = await content.ReadAsStringAsync();
-                    }
-                }
-                catch (Exception e) { Console.WriteLine(e.Message); }
-
-                #endregion
-
+                var page0 = await ("http://www.bmfbovespa.com.br/pt-br/mercados/acoes/empresas/ExecutaAcaoConsultaInfoEmp.asp?CodCVM=" + code).Download();
+                var page1 = await ("http://www.bmfbovespa.com.br/Cias-Listadas/Empresas-Listadas/ResumoProventosDinheiro.aspx?codigoCvm=" + code).Download();
+                var page2 = await ("http://www.bmfbovespa.com.br/Cias-Listadas/Empresas-Listadas/ResumoEventosCorporativos.aspx?codigoCvm=" + code).Download();
+                
                 if ((index = page0.IndexOf("Papel=") + 6) < 6) continue;
                 var length = page0.IndexOf("&", index) - index;
                 page0 = page0.Substring(index, length);
@@ -508,7 +455,7 @@ namespace Bovespa2QuantConnect
                     {
                         index = 0;
 
-                        while (page1.Length > 0 && (index = page1.IndexOf(">" + kind[int.Parse(symbol.Substring(4))] + "<", index)) > 0)
+                        while (page1.Length > 0 && (index = page1.IndexOf(">" + kind[symbol.Substring(4).ToInt32()] + "<", index)) > 0)
                         {
                             index++;
                             var idx = 0;
@@ -582,7 +529,7 @@ namespace Bovespa2QuantConnect
                             if (cols.Count == 1) event0 = 1 / (1m + event0 / 100m);
                             if (cols.Count == 2)
                             {
-                                event0 = event0 / decimal.Parse(cols[1]);
+                                event0 = event0 / decimal.Parse(cols[1], _langbr);
                                 if (code == 9512) event0 = .1m;
                             }
 
@@ -632,131 +579,156 @@ namespace Bovespa2QuantConnect
         private static async Task WriteNelogicaFiles(bool daily)
         {
             var dirs = new List<DirectoryInfo>();
-            
+
             if (daily)
                 dirs.Add(new DirectoryInfo(_leanequityfolder + @"daily\"));
             else
                 dirs.AddRange(new DirectoryInfo(_leanequityfolder + @"minute\").GetDirectories());
-            
+
+            Console.WriteLine("\r\n" + dirs.Count + " symbol directories to read");
+
+            var oldfiles = new DirectoryInfo(Environment.CurrentDirectory).GetFiles((daily ? "*_Diário*" : "*_1min*")).ToList();
+            if (oldfiles.Count > 0) oldfiles.ForEach(f => f.Delete());
+
             foreach (var dir in dirs)
             {
-                var zipfiles = dir.GetFiles("*.zip");
+                var zipfiles = dir.GetFiles("*.zip").Reverse().ToList();
 
                 foreach (var zipfile in zipfiles)
                 {
                     var index = zipfile.Name.IndexOf('.');
                     if (index < 4) continue;
 
-                    var symbol = zipfile.Name.Substring(0, index);
-                    var outputfile = symbol.ToUpper() + (daily ? "_Diário" : "1min") + ".csv";
+                    var symbol = daily ? zipfile.Name.Substring(0, index) : dir.Name;
+                    var outputfile = symbol.ToUpper() + (daily ? "_Diário" : "_1min") + ".csv";
                     var factors = ReadFactorFile(_leanequityfolder + @"factor_files\" + symbol + ".csv");
-                    
-                    File.WriteAllLines(outputfile, (await ReadZipFile(zipfile)).Select(l =>
+
+                    File.AppendAllLines(outputfile, (await ReadZipFile(zipfile)).Select(l =>
                     {
                         var data = l.Split(',');
-                        var date = DateTime.ParseExact(data[0], "yyyyMMdd", _langus);
+                        var datestr = daily ? data[0] : zipfile.Name.Substring(0, 8);
+                        var date = DateTime.ParseExact(datestr, "yyyyMMdd", _langus);
+                        if (!daily) date = date.AddMilliseconds(data[0].ToInt64());
                         var factordate = factors.Where(kvp => kvp.Key >= date).First().Key;
                         var factor = factors[factordate];
 
-                        return symbol.ToUpper() + ";" + date.ToString("dd/MM/yyyy") + ";" +
-                            Math.Round(decimal.Parse(data[1]) * factor / 10000, 2).ToString("0.00", _langbr) + ";" +
-                            Math.Round(decimal.Parse(data[2]) * factor / 10000, 2).ToString("0.00", _langbr) + ";" +
-                            Math.Round(decimal.Parse(data[3]) * factor / 10000, 2).ToString("0.00", _langbr) + ";" +
-                            Math.Round(decimal.Parse(data[4]) * factor / 10000, 2).ToString("0.00", _langbr) + ";" + data[5];
+                        return symbol.ToUpper() + ";" + date.ToString((daily ? "dd/MM/yyyy" : @"dd/MM/yyyy;HH\:mm\:ss")) + ";" +
+                            Math.Round(data[1].ToDecimal() * factor / 10000, 2).ToString("0.00", _langbr) + ";" +
+                            Math.Round(data[2].ToDecimal() * factor / 10000, 2).ToString("0.00", _langbr) + ";" +
+                            Math.Round(data[3].ToDecimal() * factor / 10000, 2).ToString("0.00", _langbr) + ";" +
+                            Math.Round(data[4].ToDecimal() * factor / 10000, 2).ToString("0.00", _langbr) + ";" +
+                            (data.Length == 6 ? data[5] : data[6] + ";" + data[5]);
 
-                    }).ToArray());
+                    }).Reverse().ToArray());
                 }
-                Console.WriteLine("\r\n" + dir.FullName + ": " + zipfiles.Count() + " files!");
+                Console.WriteLine(((1 + dirs.IndexOf(dir)) / (double)dirs.Count).ToString("0.00%") +
+                    "\t" + dir.Name.ToUpper() + ":\t" + zipfiles.Count + " days were read/written.");
             }
-            Console.WriteLine(dirs.Count + " folder(s)!" + "Done!");
         }
 
         private static SortedList<DateTime, decimal> ReadFactorFile(string file)
         {
             var factors = new SortedList<DateTime, decimal>();
-            
+
             if (!File.Exists(file))
             {
                 factors.Add(new DateTime(2049, 12, 31), 1m);
                 return factors;
             }
-       
+
             var lines = File.ReadAllLines(file);
             foreach (var line in lines)
             {
                 var data = line.Split(',');
                 var date = DateTime.ParseExact(data[0], "yyyyMMdd", _langus);
-                var factor = decimal.Parse(data[1], _langus) * decimal.Parse(data[2], _langus);
+                var factor = data[1].ToDecimal() * data[2].ToDecimal();
                 factors.Add(date, factor);
             }
 
             return factors;
-
         }
 
-        private static async Task WriteQuantConnectMinuteFile(int minutes)
+        private static async Task WriteQuantConnectHolidayFile()
         {
-            FolderCleanUp("minute");
+            // America/Sao_Paulo,bra,,equity,-,-,-,-,9.5,10,16.9166667,18,9.5,10,16.9166667,18,9.5,10,16.9166667,18,9.5,10,16.9166667,18,9.5,10,16.9166667,18,-,-,-,-
+            var holidays = new List<DateTime>();
 
-            var dirs = new DirectoryInfo(_leanequityfolder + @"tick\").GetDirectories();
+            var ofile = new FileInfo(_leanequityfolder.Replace("equity\\bra", "market-hours") + "holidays-bra.csv");
+            var output = ofile.Exists
+                ? File.ReadAllLines(ofile.FullName).ToList()
+                : (new string[] { "year, month, day" }).ToList();
+            var lastdate = output.Count == 1
+                ? new DateTime(1997, 12, 31)
+                : DateTime.ParseExact(output.Last(), "yyyy, MM, dd", _langus);
 
-            foreach (var dir in dirs)
+            if (lastdate == new DateTime(DateTime.Now.Year, 12, 31)) return;
+
+            #region Get Holidays from Bovespa page
+            try
             {
-                var zipfiles = dir.GetFiles("*.zip");
+                var i = 0;
+                var id = 0;
+                var date = new DateTime();
+                var page = await "http://www.bmfbovespa.com.br/pt-br/regulacao/calendario-do-mercado/calendario-do-mercado.aspx".Download();
+                page = page.Substring(0, page.IndexOf("linhaDivMais"));
 
-                if (zipfiles.Count() == 0) continue;
-                var outdir = Directory.CreateDirectory(dir.FullName.Replace("tick", "minute"));
+                var months = new string[] { 
+                        "Jan", "Fev", "Mar",
+                        "Abr", "Mai", "Jun",
+                        "Jul", "Ago", "Set",
+                        "Out", "Nov", "Dez" }.ToList();
 
-                foreach (var zipfile in zipfiles)
+                while (i < 12)
                 {
-                    using (var zip2open = new FileStream(zipfile.FullName, FileMode.Open, FileAccess.Read))
-                    using (var archive = new ZipArchive(zip2open, ZipArchiveMode.Read))
-                        foreach (var entry in archive.Entries)
-                            using (var file = new StreamReader(entry.Open()))
-                            {
-                                var data = (await file.ReadToEndAsync()).Split('\n');
+                    while (i < 12 && (id = page.IndexOf(">" + months[i + 0] + "<")) < 0) i++;
+                    var start = id + 1;
 
-                                var line = data[0].Split(',');
-                                var lon = Convert.ToInt64(10 * decimal.Parse(line[0]));
-                                var ttt = new TimeSpan(Convert.ToInt64(10 * decimal.Parse(line[0])));
-                                
-                            }
-                    var lines = File.ReadAllLines(zipfile.FullName, Encoding.ASCII).ToList();
+                    while (i < 11 && (id = page.IndexOf(">" + months[i + 1] + "<")) < 0) i++;
+                    var count = id - start;
 
-                    var lastmin = (new DateTime()).AddMilliseconds(Convert.ToInt32(lines.Last().Split(',')[0]));
+                    months[i] = count > 0 ? page.Substring(start, count) : page.Substring(start);
 
-                    var currsec = (new DateTime()).AddMilliseconds(Convert.ToInt32(lines.First().Split(',')[0]));
-
-                    currsec = currsec
-                        .AddSeconds(-currsec.TimeOfDay.Seconds)
-                        .AddMilliseconds(-currsec.TimeOfDay.Milliseconds);
-
-                    while (currsec < lastmin)
+                    id = 0;
+                    while ((id = months[i].IndexOf("img/ic_", id) + 6) > 6)
                     {
-                        currsec = currsec.AddMinutes(1);
-                        var prev = lines.FindAll(l => (new DateTime()).AddMilliseconds(Convert.ToInt32(l.Split(',')[0])) < currsec);
-
-                        if (prev.Count == 0) continue;
-
-                        lines.RemoveRange(0, prev.Count);
-
-                        var bar = currsec.AddMinutes(-1).TimeOfDay.TotalMilliseconds.ToString() + "," +
-                            prev.First().Split(',')[1] + "," +
-                            prev.Max(p => Convert.ToInt32(p.Split(',')[1])).ToString() + "," +
-                            prev.Min(p => Convert.ToInt32(p.Split(',')[1])).ToString() + "," +
-                            prev.Last().Split(',')[1] + "," +
-                            prev.Sum(p => Convert.ToInt32(p.Split(',')[2])).ToString() + Environment.NewLine;
-
-                        var newfile = zipfile.FullName.Replace("tick", "minute").Replace("Tick", "Minute");
-                        File.AppendAllText(newfile, bar);
-
-                        Console.WriteLine(DateTime.Now + ": " + newfile + " criado.");
+                        id++;
+                        if (DateTime.TryParseExact(months[i].Substring(id, 2) + months[i].Substring(0, 3) + DateTime.Now.Year.ToString(),
+                            "ddMMMyyyy", _langbr, DateTimeStyles.None, out date))
+                            holidays.Add(date);
                     }
+                    i++;
                 }
-
             }
+            catch (Exception e) { Console.WriteLine(e.Message); }
+            #endregion
+
+            while (lastdate < holidays.First()) holidays.Add(lastdate = lastdate.AddDays(1));
+            holidays.RemoveAll(d => d.DayOfWeek == DayOfWeek.Saturday || d.DayOfWeek == DayOfWeek.Sunday);
+
+            var zipfiles = new DirectoryInfo(_rawdatafolder).GetFiles("COTAHIST_A*zip").Where(zf =>
+            {
+                var zfyear = zf.Name.Substring(zf.Name.Length - 8, 4).ToInt32();
+                return zfyear >= holidays.Min().Year && zfyear < holidays.Max().Year;
+            }).ToArray();
+
+            foreach (var zf in zipfiles)
+            {
+                var data = await ReadZipFile(zf);
+
+                // Remove header and footer
+                data.RemoveAt(0);
+                data.RemoveAt(data.Count - 1);
+
+                data.Select(l => DateTime.ParseExact(l.Substring(2, 8), "yyyyMMdd", _langus))
+                    .ToList().ForEach(d => holidays.Remove(d));
+                Console.Write("\r\n" + zf.Name + "\t" + holidays.Count);
+            }
+
+            output.AddRange(holidays.OrderBy(d => d).Select(d => d.ToString("yyyy, MM, dd")));
+            File.WriteAllText(ofile.FullName, string.Join("\r\n", output.ToArray()));
+            Console.WriteLine("\r\n" + ofile.Name + " written!");
         }
-   
+
         private static async Task SearchTickerChange()
         {
             var index = 0;
@@ -767,37 +739,26 @@ namespace Bovespa2QuantConnect
             #region Get Cancelled and Incorporated companies from BmfBovespa site
             try
             {
-                using (var client = new HttpClient())
+                var codes = new List<string>();
+
+                page = await "http://www.bmfbovespa.com.br/cias-Listadas/empresas-com-registro-cancelado/ResumoEmpresasComRegistroCancelado.aspx?razaoSocial=".Download();
+                if ((index = page.IndexOf("<tbody>")) >= 0) page = page.Substring(0, page.IndexOf("</tbody>")).Substring(index);
+
+                index = 0;
+                while (page.Length > 1 && (index = page.IndexOf("codigo=", index) + 7) > 7)
                 {
-                    var codes = new List<string>();
+                    var code = page.Substring(index, 4);
+                    if (!codes.Contains(code)) codes.Add(code);
+                }
 
-                    using (var response = await client.GetAsync("http://www.bmfbovespa.com.br/cias-Listadas/empresas-com-registro-cancelado/ResumoEmpresasComRegistroCancelado.aspx?razaoSocial="))
-                    using (var content = response.Content)
-                    {
-                        page = await content.ReadAsStringAsync();
-                        if ((index = page.IndexOf("<tbody>")) >= 0) page = page.Substring(0, page.IndexOf("</tbody>")).Substring(index);
 
-                        index = 0;
-                        while (page.Length > 1 && (index = page.IndexOf("codigo=", index) + 7) > 7)
-                        {
-                            var code = page.Substring(index, 4);
-                            if (!codes.Contains(code)) codes.Add(code);
-                        }
-                    }
-
-                    foreach (var code in codes)
-                    {
-                        using (var response = await client.GetAsync("http://www.bmfbovespa.com.br/cias-Listadas/empresas-com-registro-cancelado/DetalheEmpresasComRegistroCancelado.aspx?codigo=" + code))
-                        using (var content = response.Content)
-                        {
-                            page = await content.ReadAsStringAsync();
-                            if ((index = page.IndexOf("lblMotivo")) < 0) { Console.Write(" " + code); continue; }
-                            page = page.Substring(0, page.IndexOf("</tbody>")).Substring(index);
-                            if ((index = page.IndexOf(">")) > 0) page = code + page.Substring(0, page.IndexOf("<")).Substring(index);
-                            if (page.ToLower().Contains("incorporad") || code == "SUBA") merged.Add(page); else cancel.Add(page);
-                        }
-                    }
-                    
+                foreach (var code in codes)
+                {
+                    page = await ("http://www.bmfbovespa.com.br/cias-Listadas/empresas-com-registro-cancelado/DetalheEmpresasComRegistroCancelado.aspx?codigo=" + code).Download();
+                    if ((index = page.IndexOf("lblMotivo")) < 0) { Console.Write(" " + code); continue; }
+                    page = page.Substring(0, page.IndexOf("</tbody>")).Substring(index);
+                    if ((index = page.IndexOf(">")) > 0) page = code + page.Substring(0, page.IndexOf("<")).Substring(index);
+                    if (page.ToLower().Contains("incorporad") || code == "SUBA") merged.Add(page); else cancel.Add(page);
                 }
             }
             catch (Exception e) { Console.WriteLine("\r\n" + page.Substring(0, 20) + "\r\n" + e.Message); }
@@ -819,7 +780,7 @@ namespace Bovespa2QuantConnect
             var lasttday = new Dictionary<string, DateTime>();
 
             foreach (var file in files)
-            {            
+            {
                 var data = File.ReadAllLines(file.FullName).OrderBy(d => d).ToList();
                 var lday = DateTime.ParseExact(data.Last().Substring(0, 8), "yyyyMMdd", _langus);
                 var fday = DateTime.ParseExact(data.First().Substring(0, 8), "yyyyMMdd", _langus);
@@ -827,12 +788,12 @@ namespace Bovespa2QuantConnect
                 File.WriteAllLines(file.FullName, data);
 
                 lasttday.Add(file.Name, lday);
-                firstday.Add(file.Name, fday);                
+                firstday.Add(file.Name, fday);
             }
-            
+
             foreach (var key in firstday.Keys)
             {
-                var results = lasttday.Where(d => 
+                var results = lasttday.Where(d =>
                     {
                         var fday = firstday[key];
                         var pday = firstday[key].AddDays(-1);
@@ -847,7 +808,7 @@ namespace Bovespa2QuantConnect
                 foreach (var result in results)
                 {
                     var data = File.ReadAllLines(_leanequityfolder + @"daily\" + result.Key).OrderBy(d => d).ToList();
-                    
+
                     // We count how many trading day there were between the first and the last days
                     // and calculate the frequency the symbol was traded
                     var count1 =
@@ -875,9 +836,9 @@ namespace Bovespa2QuantConnect
                             output += "//";
                             File.AppendAllText("mergedic.txt", output.ToUpper() + "\r\n");
                         }
-                    
+
                     File.AppendAllText("merge.txt", output.ToUpper() + "\r\n");
-                }                            
+                }
             }
             Console.WriteLine(" Done!");
         }
@@ -895,7 +856,7 @@ namespace Bovespa2QuantConnect
 
             var mergeevent = new FileInfo("MergeEvent.txt");
             if (mergeevent.Exists) mergeevent.Delete();
-            
+
             foreach (var kvp in TickerChange)
             {
                 var newfile = files.Find(f => f.Name.Contains(kvp.Key.ToLower()));
@@ -913,64 +874,6 @@ namespace Bovespa2QuantConnect
             }
             foreach (var symbol in symbols) { File.Delete(symbol.ToLower() + ".csv"); }
             Console.WriteLine(" Done!");
-        }
-
-        static void ZipALLRaw(string folder)
-        {
-            var dirs = new List<DirectoryInfo>();
-            if (folder == "daily")
-                dirs.Add(new DirectoryInfo(_leanequityfolder + @"daily\"));
-            else
-                dirs.AddRange(new DirectoryInfo(_leanequityfolder + folder + @"\").GetDirectories());
-            
-            foreach (var dir in dirs)
-            {
-                var files = dir.GetFiles("*.csv");
-
-                foreach (var file in files)
-                {
-                    var output = file.Name;
-
-                    var alllines = File.ReadAllLines(file.FullName).OrderBy(d => d).ToList();
-
-                    var zipfile = folder == "daily"
-                        ? file.FullName.Replace(".csv", ".zip")
-                        : dir.FullName + @"\" + file.Name.Substring(0, 9) + "trade.zip";
-
-                    if (DateTime.ParseExact(alllines.Last().Substring(0, 8), "yyyyMMdd", _langus) > new DateTime(1999, 1, 1))
-                    {
-                        output += " zipped and";
-                        File.WriteAllLines(file.FullName, alllines);
-
-                        using (var z = new FileStream(zipfile, FileMode.Create))
-                        using (var a = new ZipArchive(z, ZipArchiveMode.Create))
-                            a.CreateEntryFromFile(file.FullName, file.Name);
-                    }
-
-                    Console.WriteLine(output + " deleted. Last entry: " + File.ReadAllLines(file.FullName).Last().Substring(0, 8));
-                    File.Delete(file.FullName);
-                }
-            }
-        }
-
-        private static async Task<List<string>> TradingDays()
-        {            
-            var ifile = new FileInfo(_leanequityfolder.Replace("equity\\bra", "market-hours") + "holidays-bra.csv");
-            if (!ifile.Exists) await WriteQuantConnectHolidayFile();
-
-            var data = File.ReadAllLines(ifile.FullName).ToList();
-            data.RemoveAt(0);   // Remove header
-
-            var tradingdays = new List<DateTime>();
-            var holidays = data.Select(d => DateTime.ParseExact(d, "yyyy, MM, dd", _langus));
-            
-            var date = holidays.First();
-            while (date < holidays.Last()) tradingdays.Add(date = date.AddDays(1));
-
-            tradingdays = tradingdays.Except(holidays).ToList();
-            tradingdays.RemoveAll(d => d.DayOfWeek == DayOfWeek.Saturday || d.DayOfWeek == DayOfWeek.Sunday);
-
-            return tradingdays.Select(d => d.ToString("yyyyMMdd")).ToList();
         }
 
         #region Utils
@@ -991,6 +894,26 @@ namespace Bovespa2QuantConnect
 
             return !int.TryParse(line.Substring(16, 3), out type) || type < 3 || (type > 8 && type != 11)
                 || line.Substring(12, 12).Trim().Contains(" ");
+        }
+
+        private static async Task<List<string>> TradingDays()
+        {
+            var ifile = new FileInfo(_leanequityfolder.Replace("equity\\bra", "market-hours") + "holidays-bra.csv");
+            if (!ifile.Exists) await WriteQuantConnectHolidayFile();
+
+            var data = File.ReadAllLines(ifile.FullName).ToList();
+            data.RemoveAt(0);   // Remove header
+
+            var tradingdays = new List<DateTime>();
+            var holidays = data.Select(d => DateTime.ParseExact(d, "yyyy, MM, dd", _langus));
+
+            var date = holidays.First();
+            while (date < holidays.Last()) tradingdays.Add(date = date.AddDays(1));
+
+            tradingdays = tradingdays.Except(holidays).ToList();
+            tradingdays.RemoveAll(d => d.DayOfWeek == DayOfWeek.Saturday || d.DayOfWeek == DayOfWeek.Sunday);
+
+            return tradingdays.Select(d => d.ToString("yyyyMMdd")).ToList();
         }
 
         private static async Task<List<string>> ReadZipFile(FileInfo zipfile, List<string> selected)
@@ -1026,5 +949,86 @@ namespace Bovespa2QuantConnect
             return await ReadZipFile(zipfile, selected: new List<string>());
         }
         #endregion
+    }
+    public static class Extensions
+    {
+        /// <summary>
+        /// Extension method for faster string to decimal conversion. 
+        /// </summary>
+        /// <param name="str">String to be converted to positive decimal value</param>
+        /// <remarks>Method makes some assuptions - always numbers, no "signs" +,- etc.</remarks>
+        /// <returns>Decimal value of the string</returns>
+        public static decimal ToDecimal(this string str)
+        {
+            long value = 0;
+            var decimalPlaces = 0;
+            bool hasDecimals = false;
+
+            for (var i = 0; i < str.Length; i++)
+            {
+                var ch = str[i];
+                if (ch == '.')
+                {
+                    hasDecimals = true;
+                    decimalPlaces = 0;
+                }
+                else
+                {
+                    value = value * 10 + (ch - '0');
+                    decimalPlaces++;
+                }
+            }
+
+            var lo = (int)value;
+            var mid = (int)(value >> 32);
+            return new decimal(lo, mid, 0, false, (byte)(hasDecimals ? decimalPlaces : 0));
+        }
+
+        /// <summary>
+        /// Extension method for faster string to Int32 conversion. 
+        /// </summary>
+        /// <param name="str">String to be converted to positive Int32 value</param>
+        /// <remarks>Method makes some assuptions - always numbers, no "signs" +,- etc.</remarks>
+        /// <returns>Int32 value of the string</returns>
+        public static int ToInt32(this string str)
+        {
+            int value = 0;
+            for (var i = 0; i < str.Length; i++)
+            {
+                value = value * 10 + (str[i] - '0');
+            }
+            return value;
+        }
+
+        /// <summary>
+        /// Extension method for faster string to Int64 conversion. 
+        /// </summary>
+        /// <param name="str">String to be converted to positive Int64 value</param>
+        /// <remarks>Method makes some assuptions - always numbers, no "signs" +,- etc.</remarks>
+        /// <returns>Int32 value of the string</returns>
+        public static long ToInt64(this string str)
+        {
+            long value = 0;
+            for (var i = 0; i < str.Length; i++)
+            {
+                value = value * 10 + (str[i] - '0');
+            }
+            return value;
+        }
+
+        public static async Task<string> Download(this string str)
+        {
+            try
+            {
+                using (var client = new HttpClient())
+                using (var response = await client.GetAsync(str))
+                using (var content = response.Content)
+                    return await content.ReadAsStringAsync();
+            }
+            catch (Exception e)
+            {
+                return e.Message;
+            }
+        }
     }
 }
